@@ -131,6 +131,8 @@ void IpAddress::checkIP() {
        || ((a & 0xFFFF0000) == 0xC0A80000 /* 192.168.0.0/16 */)
        || ((a & 0xFF000000) == 0x7F000000 /* 127.0.0.0/8 */)
        || ((a & 0xFFFF0000) == 0xA9FE0000 /* 169.254.0.0/16 Link-Local communication rfc3927 */)
+       || (a == 0xFFFFFFFF /* 255.255.255.255 */)
+       || (a == 0x0        /* 0.0.0.0 */)
        )
       addr.privateIP = true;
 
@@ -247,6 +249,9 @@ char* IpAddress::printMask(char *str, u_int str_len, bool isLocalIP) {
 bool IpAddress::isLocalHost(int16_t *network_id) const {
   bool local = false;
 
+  if(addr.multicastIP || addr.broadcastIP)
+    return(true);
+  
   if(addr.ipVersion == 4) {
     u_int32_t v = /* htonl */(addr.ipType.ipv4);
     local = ntop->isLocalAddress(AF_INET, (void*)&v, network_id);

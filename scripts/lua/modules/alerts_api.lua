@@ -13,6 +13,7 @@ local alert_severities = require "alert_severities"
 local alert_consts = require("alert_consts")
 local os_utils = require("os_utils")
 local recipients = require "recipients"
+local pools_alert_utils = require "pools_alert_utils"
 local do_trace = false
 
 local alerts_api = {}
@@ -129,11 +130,8 @@ end
 --! @brief Adds pool information to the alert
 --! @param entity_info data returned by one of the entity_info building functions
 local function addAlertPoolInfo(entity_info, alert_json)
-   local pools_alert_utils = require "pools_alert_utils"
-
    if alert_json then
-      local pool_id = pools_alert_utils.get_entity_pool_id(entity_info)
-      alert_json.pool_id = pool_id
+      alert_json.host_pool_id = pools_alert_utils.get_host_pool_id(entity_info)
    end
 end
 
@@ -181,7 +179,6 @@ function alerts_api.store(entity_info, type_info, when)
   }
 
   addAlertPoolInfo(entity_info, alert_to_store)
-
   recipients.dispatch_notification(alert_to_store, current_script)
 
   return(true)
@@ -269,6 +266,7 @@ function alerts_api.trigger(entity_info, type_info, when, cur_alerts)
   end
 
   local alert_json = json.encode(type_info.alert_type_params)
+
   local triggered
   local alert_key_name = get_alert_triggered_key(type_info.alert_type.alert_key, subtype)
 
@@ -294,18 +292,19 @@ function alerts_api.trigger(entity_info, type_info, when, cur_alerts)
   end
 
   if(triggered == nil) then
-    if(do_trace) then print("[Don't Trigger alert (already triggered?) @ "..granularity_sec.."] "..
-        entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n") end
+    if(do_trace) then 
+      print("Alert not triggered (already triggered?) @ "..granularity_sec.."] "..
+            entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n")
+    end
     return(false)
   else
-    if(do_trace) then print("[TRIGGER alert @ "..granularity_sec.."] "..
-        entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n") end
+    if(do_trace) then 
+      print("Alert triggered @ "..granularity_sec.." ".. entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n")
+    end
   end
 
   triggered.ifid = ifid
   triggered.action = "engage"
-
-  addAlertPoolInfo(entity_info, triggered)
 
   -- Emit the notification only if the notification hasn't already been emitted.
   -- This is to avoid alert storms when ntopng is restarted. Indeeed,
@@ -313,6 +312,7 @@ function alerts_api.trigger(entity_info, type_info, when, cur_alerts)
   -- same 100 alerts will be triggered again as soon as ntopng is restarted, causing
   -- 100 trigger notifications to be emitted twice. This check is to prevent such behavior.
   if not is_trigger_notified(triggered) then
+     addAlertPoolInfo(entity_info, triggered)
      recipients.dispatch_notification(triggered, current_script)
      mark_trigger_notified(triggered)
   end
@@ -370,22 +370,22 @@ function alerts_api.release(entity_info, type_info, when, cur_alerts)
   end
 
   if(released == nil) then
-    if(do_trace) then tprint("[Dont't Release alert (not triggered?) @ "..granularity_sec.."] "..
-			     entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n") end
-    
+    if(do_trace) then 
+      print("Alert not released (not triggered?) @ "..granularity_sec.." "..
+	    entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n")
+    end
     return(false)
   else
-     if(do_trace) then tprint("[RELEASE alert @ "..granularity_sec.."] "..
-			      entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n") end
+    if(do_trace) then 
+      print("Alert released @ "..granularity_sec.." ".. entity_info.entity_val .."@"..type_info.alert_type.i18n_title..":".. subtype .. "\n") 
+    end
   end
 
   released.ifid = ifid
   released.action = "release"
 
   addAlertPoolInfo(entity_info, released)
-
   mark_release_notified(released)
-
   recipients.dispatch_notification(released, current_script)
 
   return(true)
@@ -712,6 +712,12 @@ function alerts_api.invokeScriptHook(check, configset, hook_fn, p1, p2, p3)
   current_configset = configset
 
   return(hook_fn(p1, p2, p3))
+end
+
+-- ##############################################
+
+function alerts_api.setCheck(check)
+  current_script = check
 end
 
 -- ##############################################

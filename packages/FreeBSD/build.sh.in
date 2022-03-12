@@ -22,7 +22,6 @@ prefix:      /
 EOF
 
 echo "deps: {" >> ${STAGEDIR}/+MANIFEST
-pkg query "  %n: { version: \"%v\", origin: %o }" libgcrypt      >> ${STAGEDIR}/+MANIFEST
 pkg query "  %n: { version: \"%v\", origin: %o }" libmaxminddb   >> ${STAGEDIR}/+MANIFEST
 pkg query "  %n: { version: \"%v\", origin: %o }" libzmq4        >> ${STAGEDIR}/+MANIFEST
 pkg query "  %n: { version: \"%v\", origin: %o }" rrdtool        >> ${STAGEDIR}/+MANIFEST
@@ -31,7 +30,6 @@ pkg query "  %n: { version: \"%v\", origin: %o }" libsodium      >> ${STAGEDIR}/
 pkg query "  %n: { version: \"%v\", origin: %o }" sqlite3        >> ${STAGEDIR}/+MANIFEST
 pkg query "  %n: { version: \"%v\", origin: %o }" redis          >> ${STAGEDIR}/+MANIFEST
 pkg query "  %n: { version: \"%v\", origin: %o }" zstd           >> ${STAGEDIR}/+MANIFEST
-pkg query "  %n: { version: \"%v\", origin: %o }" bash           >> ${STAGEDIR}/+MANIFEST
 echo "}" >> ${STAGEDIR}/+MANIFEST
 
 # Add files
@@ -73,7 +71,7 @@ find . -name "*#" -exec /bin/rm {} ';'
 find . -name "*~" -exec /bin/rm {} ';'
 
 # Add GeoIP files
-
+mkdir -p ${STAGEDIR}/usr/local/share/ntopng/httpdocs/geoip
 cp ~/dat_files/dbip-asn-lite-*.mmdb ${STAGEDIR}/usr/local/share/ntopng/httpdocs/geoip/dbip-asn-lite.mmdb
 cp ~/dat_files/dbip-city-lite-*.mmdb ${STAGEDIR}/usr/local/share/ntopng/httpdocs/geoip/dbip-city-lite.mmdb
 cp ~/dat_files/dbip-country-lite-*.mmdb ${STAGEDIR}/usr/local/share/ntopng/httpdocs/geoip/dbip-country-lite.mmdb

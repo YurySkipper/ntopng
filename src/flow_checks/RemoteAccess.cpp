@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2013-21 - ntop.org
+ * (C) 2013-22 - ntop.org
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -34,11 +34,12 @@ void RemoteAccess::protocolDetected(Flow *f) {
   case NDPI_PROTOCOL_CATEGORY_REMOTE_ACCESS:
   case NDPI_PROTOCOL_CATEGORY_VPN:
   case NDPI_PROTOCOL_CATEGORY_FILE_SHARING:
-    if(cli) cli->incrRemoteAccess();
-
-    computeCliSrvScore(alert_type, cli_score_pctg, &c_score, &s_score);
-
-    f->triggerAlertAsync(alert_type, c_score, s_score);
+    if(!f->isLocalToLocal()) {
+      if(cli) cli->incrRemoteAccess();
+      
+      computeCliSrvScore(alert_type, cli_score_pctg, &c_score, &s_score);
+      f->triggerAlertAsync(alert_type, c_score, s_score);
+    }
     break;
   default:
     break;

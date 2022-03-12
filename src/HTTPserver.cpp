@@ -672,11 +672,13 @@ static void redirect_to_login(struct mg_connection *conn,
 	      "HTTP/1.1 302 Found\r\n"
 	      "Server: ntopng %s (%s)\r\n"
 	      "Set-Cookie: session=%s; path=/; expires=Thu, 01-Jan-1970 00:00:01 GMT; max-age=0;%s\r\n"  // Session ID
-	      "Set-Cookie: user=; path=/; expires=Thu, 01-Jan-1970 00:00:01 GMT; max-age=0;\r\n"
-	      "Set-Cookie: password=; path=/; expires=Thu, 01-Jan-1970 00:00:01 GMT; max-age=0;\r\n"
+	      "Set-Cookie: user=; path=/; expires=Thu, 01-Jan-1970 00:00:01 GMT; max-age=0;%s\r\n"
+	      "Set-Cookie: password=; path=/; expires=Thu, 01-Jan-1970 00:00:01 GMT; max-age=0;%s\r\n"
 	      "Location: %s%s%s%s%s%s%s%s\r\n\r\n",
 	      PACKAGE_VERSION, PACKAGE_MACHINE,
 	      session_id,
+	      get_secure_cookie_attributes(request_info),
+	      get_secure_cookie_attributes(request_info),
 	      get_secure_cookie_attributes(request_info),
 	      ntop->getPrefs()->get_http_prefix(), Utils::getURL((char*)LOGIN_URL, buf, sizeof(buf)),
 	      (referer || reason) ? "?" : "",
@@ -1194,8 +1196,8 @@ static int handle_lua_request(struct mg_connection *conn) {
       return(1);
 #ifdef HAVE_MYSQL
     } else if(!whitelisted /* e.g. login.lua */
-        && ntop->getPrefs()->do_dump_flows_on_mysql()
-        && !ntop->isDbCreated()
+	      && ntop->getPrefs()->do_dump_flows_on_mysql()
+	      && (!ntop->isDbCreated())
 	      && strcmp(request_info->uri, PLEASE_WAIT_URL)) {
       redirect_to_please_wait(conn, request_info);
       return(1);

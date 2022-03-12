@@ -412,6 +412,8 @@ void Ntop::registerPrefs(Prefs *_prefs, bool quick_registration) {
 #if defined(HAVE_CLICKHOUSE) && defined(HAVE_MYSQL)
   if(prefs->useClickHouse())
     clickhouseImport = new (std::nothrow) ClickHouseImport();
+  else
+    clickhouseImport = NULL;
 #endif
 
   redis->setInitializationComplete();
@@ -1026,8 +1028,9 @@ void Ntop::recipient_delete(u_int16_t recipient_id) {
 
 /* ******************************************* */
 
-void Ntop::recipient_register(u_int16_t recipient_id, AlertLevel minimum_severity, u_int8_t enabled_categories) {
-  recipients.register_recipient(recipient_id, minimum_severity, enabled_categories);
+void Ntop::recipient_register(u_int16_t recipient_id, AlertLevel minimum_severity,
+                              Bitmap128 enabled_categories, Bitmap128 enabled_host_pools) {
+  recipients.register_recipient(recipient_id, minimum_severity, enabled_categories, enabled_host_pools);
 }
 
 /* ******************************************* */
@@ -2831,7 +2834,7 @@ void Ntop::shutdownAll() {
   /* Perform shutdown operations on all active interfaces */
   ntop->shutdownInterfaces();
 
-  ntop->getTrace()->traceEvent(TRACE_NORMAL, "Executing shutdown script");
+  ntop->getTrace()->traceEvent(TRACE_NORMAL, "Executing shutdown script [%s]", SHUTDOWN_SCRIPT_PATH);
 
   /* Exec shutdown script before shutting down ntopng */
   if((shutdown_activity = new (std::nothrow) ThreadedActivity(SHUTDOWN_SCRIPT_PATH))) {

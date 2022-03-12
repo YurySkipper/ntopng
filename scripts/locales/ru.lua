@@ -3893,8 +3893,8 @@ local lang = {
     ["source_macs"] = "Source Only",
   },
   ["manage_configurations"] = {
-    ["active_monitoring"] = "Active monitoring",
-    ["after_behavior_changes"] = "<b>Restart</b> %{product} to make the behavior changes effective.",
+    ["active_monitoring"] = "Активный мониторинг",
+    ["after_behavior_changes"] = "<b>Restart</b> %{product} чтобы сохранить изменения в состоянии поведения.",
     ["after_reset_request"] = "<b>Restart</b> %{product} to make the configuration factory reset effective.",
     ["checks"] = "Checks",
     ["config_import"] = "Import <span class='item'>{{ type }}</span> Configuration",

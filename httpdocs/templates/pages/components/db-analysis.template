@@ -3,18 +3,29 @@
     Base template for datatables.
 #}
 
-<link rel="stylesheet" href='{{ ntop.getHttpPrefix() }}/css/apexcharts.css'/>
+<!-- vue3 -->
+<script src="{* ntop.getHttpPrefix() *}/vue/vue-prod.js"></script>
+<script src="{* ntop.getHttpPrefix() *}/vue/vue3-sfc-loader.js"></script>
+<script src="{* ntop.getHttpPrefix() *}/vue/ntopng_vue_loader.js"></script>
 
-<script type='text/javascript' src='{{ ntop.getHttpPrefix() }}/js/apexchart/apexcharts.min.js?{{ ntop.getStaticFileEpoch() }}'></script>
-<script type='text/javascript' src='{{ ntop.getHttpPrefix() }}/js/widgets/widgets.js?{{ ntop.getStaticFileEpoch() }}'></script>
+<!-- defines base_path globals const-->
+<script type='text/javascript'>
+  const base_path = '{* ntop.getHttpPrefix() *}';
+  const default_ifid = '{* interface.getId() *}';
+</script>
 
 <div class='row'>
 
-  <div class='col-12'>
+    <div class='col-12'>
     <div class="mb-2">
-      {* ui_utils.render_datetime_range_picker(range_picker) *}
+      <div class="w-100">
+	<div clas="range-container d-flex flex-wrap">
+	  <div class="range-picker d-flex m-auto flex-wrap" id="datatable-vue">
+	    <range-picker ref="range-picker-vue" :id="id_range_picker"></range-picker>
+	  </div>
+	</div>
+      </div>
     </div>
-  </div>
 
   <div class='col-12'>
     <div class="card card-shadow widget-box-container">
@@ -50,34 +61,69 @@
   </div>
 </div>
 
-<link href="{{ ntop.getHttpPrefix() }}/css/dataTables.bootstrap5.min.css" rel="stylesheet"/>
-
 <script type="text/javascript">
     i18n_ext.showing_x_to_y_rows = "{{ i18n('showing_x_to_y_rows', {x='_START_', y='_END_', tot='_TOTAL_'}) }}";
 </script>
 <script type='text/javascript'>
   let pageCsrf = "{{ ntop.getRandomCSRFValue() }}";
   let table = undefined;
-  
-  $(document).ready(function(){
-    hideOverlays();
+  let VUE_APP;
 
-    window.addEventListener("hashchange", function() {
-      onRangePickerChange(false, false, false);
-      let params = datasourceParams;
-      let searchParams = new URLSearchParams(window.location.search);
-      searchParams.forEach(function(value, key) {
-        params[key] = value;
-      })
+  function start_range_picker() {
+      let datatable_vue_options = {
+	  props: {
+	      id: String,
+	  },
+	  components: {	  
+   	      'range-picker': Vue.defineAsyncComponent( () => ntopng_vue_loader.loadModule(`${base_path}/vue/components/range-picker.vue`, ntopng_vue_loader.loadOptions) ),
+	  },
+	  /**
+	   * First method called when the component is created.
+	   */
+	  created() {},
+	  mounted() {},
+	  data() {
+	      return {
+		  id_range_picker: `range_picker`,
+		  i18n: (t) => { return i18n(t); },
+	      };
+	  },
+	  methods: {},
+      };
+      const datatable_vue = Vue.createApp(datatable_vue_options);
+      const vue_app = datatable_vue.mount("#datatable-vue");
+      return vue_app;
+  }
 
-      {% for _, chart_opts in ipairs(charts) do %}
+  $(document).ready(async function(){
+      if (ntopng_url_manager.get_url_entry("ifid") == null) {
+	  ntopng_url_manager.add_obj_to_url({ifid: default_ifid});
+      }
+      if (ntopng_url_manager.get_url_entry("epoch_begin") == null
+      	 || ntopng_url_manager.get_url_entry("epoch_end") == null) {
+	 let default_epoch_begin = Number.parseInt((Date.now() - 1000 * 30 * 60) / 1000);
+	 let default_epoch_end = Number.parseInt(Date.now() / 1000);
+	 ntopng_url_manager.set_key_to_url("epoch_begin", default_epoch_begin);
+	 ntopng_url_manager.set_key_to_url("epoch_end", default_epoch_end);
+      }
+      VUE_APP = start_range_picker();
+      
+      await ntopng_sync.on_ready("range_picker");
+
+      NtopUtils.hideOverlays();
+
+    ntopng_status_manager.on_status_change("datatable", (new_status) => {
+	let url_params = ntopng_url_manager.get_url_params();
+	{% for _, chart_opts in ipairs(charts) do %}
         if("{{ chart_opts.chart_type }}" === "geomap") {
-          redraw_hosts(null, true, searchParams.toString() + "&chart_id={{ chart_opts.chart_id }}");
+            redraw_hosts(null, true, url_params + "&chart_id={{ chart_opts.chart_id }}");
         } else {
-          params["chart_id"] = "{{ chart_opts.chart_id }}";
-          WidgetUtils.getWidgetByName("{{ chart_opts.chart_id }}").update(params);
+	    let obj_params = ntopng_url_manager.get_url_object();
+            obj_params["chart_id"] = "{{ chart_opts.chart_id }}";
+            WidgetUtils.getWidgetByName("{{ chart_opts.chart_id }}").update(obj_params);
         }
-      {% end %}
+	{% end %}
     }, false);
+
 });
 </script>

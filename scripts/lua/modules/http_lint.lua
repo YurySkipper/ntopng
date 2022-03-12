@@ -105,18 +105,6 @@ local function validateEmptyOr(other_validation)
 end
 http_lint.validateEmptyOr = validateEmptyOr
 
-local function validateMeasurement(p)
-  local am_utils = require "am_utils"
-
-  if(am_utils) then
-    local available_measurements = am_utils.getMeasurementsInfo()
-
-    return(available_measurements[p] ~= nil)
-  end
-
-  return(false)
-end
-
 -- #################################################################
 
 -- FRONT-END VALIDATORS
@@ -319,6 +307,21 @@ end
 
 local function validateJSON(j)
    return (json.decode(j) ~= nil)
+end
+
+local function validateMeasurement(p)
+  --[[ FIXX include loop check (pragma_once_checks)
+  local am_utils = require "am_utils"
+
+  if am_utils then
+    local available_measurements = am_utils.getMeasurementsInfo()
+
+    return(available_measurements[p] ~= nil)
+  end
+
+  return(false)
+  --]]
+  return validateSingleWord(p)
 end
 
 -- #################################################################
@@ -1411,7 +1414,9 @@ local known_parameters = {
 -- HOST SPECIFICATION
    ["host"]                    = validateHost,                  -- an IPv4 (optional @vlan), IPv6 (optional @vlan), or MAC address
    ["versus_host"]             = validateHost,                  -- an host for comparison
-   ["mac"]                     = validateMac,                   -- a MAC address
+   ["mac"]                     = validateEmptyOr(validateListOfTypeInline(validateFilters(validateMac))),                   -- a MAC address
+   ["cli_mac"]                 = validateEmptyOr(validateListOfTypeInline(validateFilters(validateMac))),                   -- a MAC address
+   ["srv_mac"]                 = validateEmptyOr(validateListOfTypeInline(validateFilters(validateMac))),                   -- a MAC address
    ["tskey"]                   = validateSingleWord,            -- host identifier for timeseries
    ["peer1"]                   = validateHost,                  -- a Peer in a connection
    ["peer2"]                   = validateHost,                  -- another Peer in a connection
@@ -1552,6 +1557,8 @@ local known_parameters = {
    ["bind_to_all_pools"]      = validateBool,
    ["recipient_id"]           = validateNumber,
    ["recipient_check_categories"] = validateEmptyOr(validateListOfTypeInline(validateNumber)),
+   ["recipient_host_pools"] = validateEmptyOr(validateListOfTypeInline(validateNumber)),
+   ["recipient_interface_pools"] = validateEmptyOr(validateListOfTypeInline(validateNumber)),
    ["recipient_minimum_severity"]       = validateNumber,
    ["endpoint_conf_name"]     = validateUnquoted,
    ["endpoint_id"]       = validateNumberOrUnquoted,
@@ -1696,6 +1703,7 @@ local known_parameters = {
    ["field_alias"]             = validateListOfTypeInline(validateFieldAlias),
    ["dscp_class"]              = validateSingleWord,
    ["host_pool_members"]       = validateUnquoted,
+   ["type"]                    = validateSingleWord,
 
    ["bytes"]                   = validateListOfTypeInline(validateFilters(validateNumber)),
    ["packets"]                 = validateListOfTypeInline(validateFilters(validateNumber)),
@@ -1871,7 +1879,6 @@ local known_parameters = {
    ["flow_max_idle"]                               = validateNumber,
    ["active_local_host_cache_interval"]            = validateNumber,
    ["auth_session_duration"]                       = validateNumber,
-   ["local_host_cache_duration"]                   = validateNumber,
    ["local_host_cache_duration"]                   = validateNumber,
    ["intf_rrd_raw_days"]                           = validateNumber,
    ["intf_rrd_1min_days"]                          = validateNumber,

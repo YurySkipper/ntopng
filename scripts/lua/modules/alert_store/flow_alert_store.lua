@@ -214,7 +214,7 @@ function flow_alert_store:_add_additional_request_filters()
    local cli_port = _GET["cli_port"]
    local srv_port = _GET["srv_port"]
    local vlan_id = _GET["vlan_id"]
-   local l7_proto = _GET["l7_proto"]
+   local l7proto = _GET["l7proto"]
    local role = _GET["role"]
 
    self:add_filter_condition_list('vlan_id', vlan_id, 'number')
@@ -227,7 +227,7 @@ function flow_alert_store:_add_additional_request_filters()
    self:add_filter_condition_list('cli_port', cli_port, 'number')
    self:add_filter_condition_list('srv_port', srv_port, 'number')
    self:add_filter_condition_list('flow_role', role)
-   self:add_filter_condition_list('l7_proto', l7_proto, 'number')
+   self:add_filter_condition_list('l7proto', l7proto, 'number')
 end
 
 -- ##############################################
@@ -235,6 +235,7 @@ end
 --@brief Get info about additional available filters
 function flow_alert_store:_get_additional_available_filters()
    local filters = {
+      vlan_id    = tag_utils.defined_tags.vlan_id,
       ip_version = tag_utils.defined_tags.ip_version,
       ip         = tag_utils.defined_tags.ip,
       cli_ip     = tag_utils.defined_tags.cli_ip,
@@ -244,7 +245,7 @@ function flow_alert_store:_get_additional_available_filters()
       cli_port   = tag_utils.defined_tags.cli_port,
       srv_port   = tag_utils.defined_tags.srv_port,
       role       = tag_utils.defined_tags.role,
-      l7_proto   = tag_utils.defined_tags.l7proto,
+      l7proto    = tag_utils.defined_tags.l7proto,
       info       = tag_utils.defined_tags.info,
    }
 
@@ -278,9 +279,9 @@ end
 --@param as_client A boolean indicating whether the hostinfo should be build for the client or for the server
 function flow_alert_store:_alert2hostinfo(value, as_client)
    if as_client then
-      return {ip = value["cli_ip"], vlan = value["vlan_id"], name = value["cli_name"]}
+      return {ip = value["cli_ip"], name = value["cli_name"]}
    else
-      return {ip = value["srv_ip"], vlan = value["vlan_id"], name = value["srv_name"]}
+      return {ip = value["srv_ip"], name = value["srv_name"]}
    end
 end
 
@@ -380,8 +381,11 @@ function flow_alert_store:format_record(value, no_html)
    end
 
    -- Host reference
-   local cli_ip = hostinfo2hostkey(value, "cli")
-   local srv_ip = hostinfo2hostkey(value, "srv")
+   --local cli_ip = hostinfo2hostkey(value, "cli")
+   --local srv_ip = hostinfo2hostkey(value, "srv")
+   -- Handle VLAN as a separate field
+   local cli_ip = value["cli_ip"]
+   local srv_ip = value["srv_ip"]
 
    local shorten_msg
 
@@ -416,7 +420,7 @@ function flow_alert_store:format_record(value, no_html)
  
    local reference_html = "" 
    if not no_html then
-      reference_html = hostinfo2detailshref({ip = value["cli_ip"], vlan = value["vlan_id"]}, nil, href_icon, "", true)
+      reference_html = hostinfo2detailshref({ip = value["cli_ip"]}, nil, href_icon, "", true)
       if reference_html == href_icon then
 	 reference_html = ""
       end
@@ -455,7 +459,7 @@ function flow_alert_store:format_record(value, no_html)
 
    reference_html = ""
    if not no_html then
-      reference_html = hostinfo2detailshref({ip = value["srv_ip"], vlan = value["vlan_id"]}, nil, href_icon, "", true)
+      reference_html = hostinfo2detailshref({ip = value["srv_ip"]}, nil, href_icon, "", true)
       if reference_html == href_icon then
 	 reference_html = ""
       end
@@ -493,12 +497,22 @@ function flow_alert_store:format_record(value, no_html)
    local flow_cli_port = value["cli_port"]
    local flow_srv_port = value["srv_port"]
 
+   local vlan 
+   if value["vlan_id"] and tonumber(value["vlan_id"]) ~= 0 then
+      vlan = {
+         label = value["vlan_id"],
+         title = value["vlan_id"],
+         value = tonumber(value["vlan_id"]),
+      }
+   end
+
    record[RNAME.FLOW.name] = {
+      vlan = vlan,
       cli_ip = flow_cli_ip,
       srv_ip = flow_srv_ip,
       cli_port = flow_cli_port,
       srv_port = flow_srv_port,
-      active_url = active_url
+      active_url = active_url,
    }
 
    record[RNAME.VLAN_ID.name] = value["vlan_id"]
@@ -570,7 +584,12 @@ local function get_flow_link(fmt, add_hyperlink)
    local label = ''
 
    local value = fmt['flow']['cli_ip']['value']
+   local vlan = ''
    local tag = 'cli_ip'
+
+   if fmt['flow']['vlan'] and fmt['flow']['vlan']["value"] ~= 0 then
+    vlan = '@' .. get_label_link(fmt['flow']['vlan']['label'], 'vlan_id', fmt['flow']['vlan']["value"], add_hyperlink)
+   end
 
    if fmt['flow']['cli_ip']['label_long'] ~= fmt['flow']['cli_ip']['value'] then
       value = fmt['flow']['cli_ip']['label_long']
@@ -579,7 +598,7 @@ local function get_flow_link(fmt, add_hyperlink)
    label = label .. get_label_link(fmt['flow']['cli_ip']['label_long'], tag, value, add_hyperlink)
 
    if fmt['flow']['cli_port'] then
-      label = label .. ':' .. get_label_link(fmt['flow']['cli_port'], 'cli_port', fmt['flow']['cli_port'], add_hyperlink)
+      label = label .. vlan .. ':' .. get_label_link(fmt['flow']['cli_port'], 'cli_port', fmt['flow']['cli_port'], add_hyperlink)
    end
 
    label = label .. ' <i class="fas fa-exchange-alt fa-lg" aria-hidden="true"></i> '
@@ -593,10 +612,30 @@ local function get_flow_link(fmt, add_hyperlink)
    label = label .. get_label_link(fmt['flow']['srv_ip']['label_long'], tag, value, add_hyperlink)
 
    if fmt['flow']['srv_port'] then
-      label = label .. ':' .. get_label_link(fmt['flow']['srv_port'], 'srv_port', fmt['flow']['srv_port'], add_hyperlink)
+      label = label .. vlan .. ':' .. get_label_link(fmt['flow']['srv_port'], 'srv_port', fmt['flow']['srv_port'], add_hyperlink)
    end
 
    return label
+end
+
+-- ##############################################
+
+--@brief Edit specifica proto info, like converting 
+--       timestamp to date/time for TLS Certificate Validity
+local function editProtoDetails(proto_info)
+  for proto, info in pairs(proto_info) do
+    if proto == "tls" then
+      if info.notBefore then
+        info.notBefore = formatEpoch(info.notBefore)
+      end
+
+      if info.notAfter then
+        info.notAfter = formatEpoch(info.notAfter)
+      end      
+    end
+  end
+
+  return proto_info
 end
 
 -- ##############################################
@@ -651,6 +690,8 @@ function flow_alert_store:get_alert_details(value)
       label = i18n("flow_details.additional_alert_type"),
       content = fmt['additional_alerts']['descr'],
    }
+
+   proto_info = editProtoDetails(proto_info)
 
    for _, info in pairs(proto_info or {}) do
       details[#details + 1] = {

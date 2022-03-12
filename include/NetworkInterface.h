@@ -809,6 +809,7 @@ class NetworkInterface : public NetworkInterfaceAlertableEntity {
   void addInterfaceAddress(char * const addr);
   void addInterfaceNetwork(char * const net, char * addr);
   bool isInterfaceNetwork(const IpAddress * const ipa, int network_bits) const;
+  inline int select_database(char *dbname) { return(db ? db->select_database(dbname) : -1); };
   inline int exec_sql_query(lua_State *vm, char *sql, bool limit_rows, bool wait_for_db_created = false) {
     return(db ? db->exec_sql_query(vm, sql, limit_rows, wait_for_db_created) : -1);
   };
@@ -984,7 +985,7 @@ class NetworkInterface : public NetworkInterfaceAlertableEntity {
 			AlertLevel alert_severity, AlertRole role_filter, AddressTree *allowed_nets);
 
   void processExternalAlertable(AlertEntity entity,
-				const char *entity_val, bool create_if_missing,
+				const char *entity_val,
 				lua_State* vm, u_int vm_argument_idx,
 				bool do_store_alert);  
   virtual bool reproducePcapOriginalSpeed() const         { return(false);             }

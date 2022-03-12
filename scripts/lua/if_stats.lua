@@ -27,7 +27,6 @@ local top_talkers_utils = require "top_talkers_utils"
 local internals_utils = require "internals_utils"
 local page_utils = require("page_utils")
 local ui_utils = require("ui_utils")
-local interface_pools = require ("interface_pools")
 local auth = require "auth"
 local behavior_utils = require("behavior_utils")
 local graph_utils = require "graph_utils"
@@ -213,8 +212,6 @@ if (isAdministrator()) then
 end
 
 page_utils.set_active_menu_entry(page_utils.menu_entries.interface, { ifname=getHumanReadableInterfaceName(if_name) })
-
-print("<link href=\""..ntop.getHttpPrefix().."/css/tablesorted.css\" rel=\"stylesheet\">")
 
 dofile(dirs.installdir .. "/scripts/lua/inc/menu.lua")
 
@@ -758,7 +755,6 @@ end
 
    print("<tr><th colspan=7 nowrap>"..i18n("if_stats_overview.traffic_statistics").."</th></tr>\n")
 
-
    print("<tr><th nowrap>"..i18n("report.traffic_anomalies")..ternary(charts_available, " <A HREF='"..url.."&page=historical&ts_schema=iface:hosts_anomalies'><i class='fas fa-chart-area fa-sm'></i></A>", "").."</th>")
    print("<th nowrap>"..i18n("report.traffic_anomalies_local_hosts").."</th><td><span id=local_hosts_anomalies>"..formatValue(ifstats.anomalies.num_local_hosts_anomalies).."</span> <span id=local_hosts_anomalies_trend></span></td>")
    print("<th colspan=2 nowrap>"..i18n("report.traffic_anomalies_remote_hosts").."</th><td><span id=remote_hosts_anomalies>"..formatValue(ifstats.anomalies.num_remote_hosts_anomalies).."</span> <span id=remote_hosts_anomalies_trend></span></td>")
@@ -877,16 +873,15 @@ end
 
    if prefs.is_dump_flows_enabled and not ifstats.isViewed then
       local dump_to = ""
-      if prefs.is_dump_flows_to_mysql_enabled then
+      
+      if prefs.is_dump_flows_to_clickhouse_enabled then
+	 dump_to = "ClickHouse"
+      elseif prefs.is_dump_flows_to_mysql_enabled then
          dump_to = "MySQL"
       elseif prefs.is_dump_flows_to_es_enabled == true then
 	 dump_to = "ElasticSearch"
       elseif prefs.is_dump_flows_to_syslog_enabled == true then
 	 dump_to = "Syslog"
-      elseif prefs.is_nindex_enabled == true then
-	 dump_to = "nIndex"
-      elseif prefs.is_dump_flows_to_clickhouse_enabled then
-	 dump_to = "ClickHouse"
       end
 
       local export_count     = ifstats.stats.flow_export_count
@@ -964,6 +959,41 @@ end
    end
 
    if isAdministrator() and ifstats.isView == false then
+
+      -- Traffic recording
+
+      if has_traffic_recording_page then
+         print("<tr><th colspan=7 nowrap>"..i18n("traffic_recording.traffic_recording").."</th></tr>\n")
+
+         local stats = recording_utils.stats(ifstats.id)
+
+         local first_epoch = stats['FirstDumpedEpoch']
+         local last_epoch = stats['LastDumpedEpoch']
+         local start_time = stats['StartEpoch']
+
+         if first_epoch ~= nil then
+            print("<tr><th>"..i18n("traffic_recording.dump_window").."</th><td colspan=5>")
+            if first_epoch ~= nil and last_epoch ~= nil and 
+               first_epoch > 0 and last_epoch > 0 then
+               print(formatEpoch(first_epoch).." - "..formatEpoch(last_epoch))
+            else
+               print(i18n("traffic_recording.no_file"))
+            end
+            print("</td></tr>\n")
+         end
+
+         if start_time ~= nil then
+            print("<tr><th>"..i18n("traffic_recording.active_since").."</th><td colspan=5>"..formatEpoch(start_time))
+            if (start_time ~= nil) and (first_epoch ~= nil) and (first_epoch > 0) and (start_time > first_epoch) then
+               print(' - <i class="fas fa-exclamation-triangle"></i> ')
+               print(i18n("traffic_recording.missing_data_msg"))
+            end
+            print("</td></tr>\n")
+         end
+      end
+
+      -- Storage utilization
+
       local ts_utils = require "ts_utils_core"
       local storage_info = storage_utils.interfaceStorageInfo(ifid)
       local storage_items = {}
@@ -1007,11 +1037,12 @@ end
 	    print(graph_utils.stackedProgressBars(storage_info.total, storage_items, nil, bytesToSize))
 	    print("</td></tr>\n")
 	 end
+
       end
    end
 
    if ntop.isPcapDownloadAllowed() and ifstats.isView == false and ifstats.isDynamic == false and is_packet_interface then
-      print("<tr><th>"..i18n("download").."&nbsp;<i class=\"fas fa-download fa-lg\"></i></th><td colspan=5>")
+      print("<tr><th>"..i18n("live_capture.live_capture").."&nbsp;<i class=\"fas fa-download fa-lg\"></i></th><td colspan=5>")
 
       local live_traffic_utils = require("live_traffic_utils")
       live_traffic_utils.printLiveTrafficForm(interface.getId())
@@ -1268,7 +1299,6 @@ print[[
 ]]
 
 print [[
-<script type="text/javascript" src="]] print(ntop.getHttpPrefix()) print [[/js/jquery.tablesorter.js?]] print(ntop.getStaticFileEpoch()) print[["></script>
 	<script type='text/javascript'>
 	 window.onload=function() {]]
 
@@ -1593,7 +1623,6 @@ elseif(page == "config") then
       return
    end
 
-   local interface_pools_instance = interface_pools:create()
    local messages = {}
 
    -- Flow dump check
@@ -1614,13 +1643,6 @@ elseif(page == "config") then
              text = i18n("prefs.restart_needed", {product=info.product}),
            }
          end
-      end
-   end
-
-   if _SERVER["REQUEST_METHOD"] == "POST" then
-      -- bind interface to pool
-      if (_POST["pool"]) then
-         interface_pools_instance:bind_member(ifid, tonumber(_POST["pool"]))
       end
    end
 
@@ -1649,16 +1671,6 @@ elseif(page == "config") then
       print[[
          </td>
       </tr>]]
-
-      -- Interface Pool
-      print([[
-         <tr>
-            <th>]].. i18n("pools.pool") ..[[</th>
-            <td>
-               ]].. ui_utils.render_pools_dropdown(interface_pools_instance, ifid, "interface") ..[[
-            </td>
-         </tr>
-      ]])
 
       -- Interface speed
       if not have_nedge then
@@ -2527,7 +2539,6 @@ print [[
 ]]
 
 print [[
-	 <script type="text/javascript" src="]] print(ntop.getHttpPrefix()) print [[/js/jquery.tablesorter.js?]] print(ntop.getStaticFileEpoch()) print[["></script>
 <script>
 $(document).ready(function()
     {

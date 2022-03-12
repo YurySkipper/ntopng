@@ -6,16 +6,16 @@
     /* Application */
     {responsivePriority: 3, name: 'l7_proto', data: 'l7_proto', orderable: false, className: 'text-center', render: (proto, type, row) => {
         if (type !== "display") return proto.value;
-	return DataTableRenders.filterize('l7_proto', proto.value, proto.label);
+	return DataTableRenders.filterize('l7proto', proto.value, proto.label);
     }},
     /* Alert */
     {responsivePriority: 2, name: 'alert', data: 'msg', orderable: false, className: 'text-nowrap', render: DataTableRenders.formatNameDescription },
     /* Flow */
-    {responsivePriority: 2, name: 'flow', data: 'flow', orderable: false, className: 'text-nowrap', render: DataTableRenders.formatFlowTuple},
+    {responsivePriority: 2, name: 'flow', data: 'flow', width: '100%', orderable: false, className: 'text-nowrap', render: DataTableRenders.formatFlowTuple},
     /* Counts */
     {responsivePriority: 3, name: 'count', className: 'text-center', data: 'count', visible: false},
     /* Description */
-    {responsivePriority: 4, name: 'description', data: 'description', width: '100%', orderable: false, className: 'text-nowrap', render: DataTableRenders.formatMessage},
+    {responsivePriority: 4, name: 'description', data: 'description', width: '100%', orderable: false, className: 'none', render: DataTableRenders.formatMessage},
     /* Additional alerts */
-    {responsivePriority: 3, name: 'additional_alerts', data: 'additional_alerts',  orderable: false, className: 'text-nowrap', render: DataTableRenders.formatMessage},
+    {responsivePriority: 3, name: 'additional_alerts', data: 'additional_alerts',  orderable: false, className: 'none', render: DataTableRenders.formatMessage},
 ]

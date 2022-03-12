@@ -29,12 +29,10 @@
 class MySQLDB : public DB {
  protected:
   MYSQL mysql;
-  MYSQL mysql_alt;
-  bool db_operational, mysql_alt_connected;
+  bool db_operational;
   FILE *log_fd;
   u_int32_t mysqlEnqueuedFlows;
   Mutex m;
-  bool clickhouse_mode;
   
   volatile bool db_created;
   pthread_t queryThreadLoop;
@@ -45,13 +43,15 @@ class MySQLDB : public DB {
   int exec_sql_query(MYSQL *conn, const char *sql, bool doReconnect = true,
 		     bool ignoreErrors = false, bool doLock = true);
   void try_exec_sql_query(MYSQL *conn, char *sql);
-  virtual bool createDBSchema(bool set_db_created = true);
+  virtual bool createDBSchema();
   bool createNprobeDBView();
   MYSQL* mysql_try_connect(MYSQL *conn, const char *dbname);
   int exec_quick_sql_query(char *sql, char *out, u_int out_len);
-  
+  void mysql_result_to_lua(lua_State *vm, MYSQL_RES *result,
+			   int num_fields, bool limitRows);
+    
  public:
-  MySQLDB(NetworkInterface *_iface, bool _clickhouse_mode);
+  MySQLDB(NetworkInterface *_iface);
   virtual ~MySQLDB();
 
   virtual void* queryLoop();
@@ -62,9 +62,10 @@ class MySQLDB : public DB {
   char *escapeAphostrophes(const char *unescaped);
   int flow2InsertValues(Flow *f, char *json, char *values_buf, size_t values_buf_len);
   int exec_sql_query(lua_State *vm, char *sql, bool limitRows, bool wait_for_db_created);
-  void startLoop();
+  virtual bool startQueryLoop();
   void shutdown();
   int exec_single_query(lua_State *vm, char *sql);
+  int select_database(char *dbname);
 };
 
 #endif

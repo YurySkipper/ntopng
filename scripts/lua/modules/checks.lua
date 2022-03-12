@@ -6,7 +6,6 @@
 -- core. Users can provide their own modules to trigger custom alerts,
 -- export data, or perform periodic tasks.
 
-
 -- Hack to avoid include loops
 if(pragma_once_checks == true) then
    -- avoid multiple inclusions
@@ -16,7 +15,6 @@ end
 pragma_once_checks = true
 
 local dirs = ntop.getDirs()
-package.path = dirs.installdir .. "/scripts/lua/modules/pools/?.lua;" .. package.path
 
 require "lua_utils"
 
@@ -25,11 +23,8 @@ local json = require("dkjson")
 local script_manager = require("script_manager")
 local alert_consts = require "alert_consts"
 local http_lint = require("http_lint")
-local pools_lua_utils = require "pools_lua_utils"
 local alert_exclusions = require "alert_exclusions"
 local alerts_api = require("alerts_api")
-
-local local_network_pools = require "local_network_pools"
 
 local checks = {}
 
@@ -91,7 +86,6 @@ local available_subdirs = {
    {
       id = checks.HOST_SUBDIR_NAME,
       label = "hosts",
-      pools = "host_pools",
       filter = {
 	 -- Default fields populated automatically when creating filters
 	 default_fields   = { "ip", },
@@ -105,7 +99,6 @@ local available_subdirs = {
    }, {
       id = checks.INTERFACE_SUBDIR_NAME,
       label = "interfaces",
-      pools = "interface_pools",
       filter = {
 	 default_fields = { "alert_entity_val" },
 	 available_fields = {
@@ -133,7 +126,6 @@ local available_subdirs = {
    }, {
       id = checks.NETWORK_SUBDIR_NAME,
       label = "networks",
-      pools = "local_network_pools",
       filter = {
 	 default_fields = { "alert_entity_val" },
 	 available_fields = {
@@ -161,7 +153,6 @@ local available_subdirs = {
    }, {
       id = checks.SNMP_DEVICE_SUBDIR_NAME,
       label = "host_details.snmp",
-      pools = "snmp_device_pools",
       filter = {
 	 default_fields = { "alert_entity_val" },
 	 available_fields = {
@@ -200,7 +191,6 @@ local available_subdirs = {
 	    },
 	 },
       },
-      -- No pools for flows
    }, {
       id = checks.SYSTEM_SUBDIR_NAME,
       label = "system",
@@ -213,42 +203,54 @@ local available_subdirs = {
 -- Checks category consts
 -- IMPORTANT keep it in sync with ntop_typedefs.h enum CheckCategory
 checks.check_categories = {
-   other = {
-      id = 0,
-      icon = "fas fa-scroll",
-      i18n_title = "checks.category_other",
-      i18n_descr = "checks.category_other_descr",
-   },
-   security = {
-      id = 1,
-      icon = "fas fa-shield-alt",
-      i18n_title = "checks.category_security",
-      i18n_descr = "checks.category_security_descr",
-   },
-   internals = {
-      id = 2,
-      icon = "fas fa-wrench",
-      i18n_title = "checks.category_internals",
-      i18n_descr = "checks.category_internals_descr",
-   },
-   network = {
-      id = 3,
-      icon = "fas fa-network-wired",
-      i18n_title = "checks.category_network",
-      i18n_descr = "checks.category_network_descr",
-   },
-   system = {
-      id = 4,
-      icon = "fas fa-server",
-      i18n_title = "checks.category_system",
-      i18n_descr = "checks.category_system_descr",
-   },
-   ids_ips = {
-      id = 5,
-      icon = "fas fa-user-lock",
-      i18n_title = "checks.category_ids_ips",
-      i18n_descr = "checks.category_ids_ips_descr",
-   }
+  other = {
+    id = 0,
+    icon = "fas fa-scroll",
+    i18n_title = "checks.category_other",
+    i18n_descr = "checks.category_other_descr",
+  },
+  security = {
+    id = 1,
+    icon = "fas fa-shield-alt",
+    i18n_title = "checks.category_security",
+    i18n_descr = "checks.category_security_descr",
+  },
+  internals = {
+    id = 2,
+    icon = "fas fa-wrench",
+    i18n_title = "checks.category_internals",
+    i18n_descr = "checks.category_internals_descr",
+  },
+  network = {
+    id = 3,
+    icon = "fas fa-network-wired",
+    i18n_title = "checks.category_network",
+    i18n_descr = "checks.category_network_descr",
+  },
+  system = {
+    id = 4,
+    icon = "fas fa-server",
+    i18n_title = "checks.category_system",
+    i18n_descr = "checks.category_system_descr",
+  },
+  ids_ips = {
+    id = 5,
+    icon = "fas fa-user-lock",
+    i18n_title = "checks.category_ids_ips",
+    i18n_descr = "checks.category_ids_ips_descr",
+  },
+  active_monitoring = {
+    id = 6,
+    icon = "fas fa-tachometer-alt",
+    i18n_title = "checks.category_active_monitoring",
+    i18n_descr = "checks.category_active_monitoring_descr",
+  },
+  snmp = {
+    id = 7,
+    icon = "fas fa-heartbeat",
+    i18n_title = "checks.category_snmp",
+    i18n_descr = "checks.category_snmp_descr",
+  }
 }
 
 -- Hook points for flow/periodic modules
@@ -1956,7 +1958,6 @@ function checks.printUserScripts()
                     </tbody>
                 </table>
         </div>
-    <link href="]].. ntop.getHttpPrefix() ..[[/css/dataTables.bootstrap5.min.css" rel="stylesheet"/>
     <script type='text/javascript'>
 
     $(document).ready(function() {
@@ -2146,8 +2147,6 @@ local function setupLocalNetworkChecks(str_granularity, checks_var, do_trace)
    })
 
    checks_var.configset = checks.getConfigset()
-   -- Instance of local network pools to get assigned members
-   checks_var.pools_instance = local_network_pools:create()
 end
 
 -- #################################################################
@@ -2179,8 +2178,6 @@ local function setupSNMPChecks(str_granularity, checks_var, do_trace)
       return false
    end
    
-   local snmp_device_pools = require "snmp_device_pools"
-   
    if do_trace then print("alert.lua:setup("..str_granularity..") called\n") end
    
    checks_var.snmp_device_entity = alert_consts.alert_entities.snmp_device.entity_id
@@ -2193,8 +2190,6 @@ local function setupSNMPChecks(str_granularity, checks_var, do_trace)
       do_benchmark = checks_var.do_benchmark,
    })
    checks_var.configset = checks.getConfigset()
-   -- Instance of snmp device pools to get assigned members
-   checks_var.pools_instance = snmp_device_pools:create()
 
    return true
 end
