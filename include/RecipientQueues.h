@@ -27,6 +27,8 @@
 
 class RecipientQueues {
  private:
+  u_int16_t recipient_id;
+
   AlertFifoQueue *queue;
 
   /* Counters for the number of drops occurred when enqueuing */
@@ -42,10 +44,13 @@ class RecipientQueues {
   AlertLevel minimum_severity;
 
   /* Only enable enqueue/dequeue for notifications falling into these categories */
-  u_int8_t enabled_categories; /* MUST be large enough to contain MAX_NUM_SCRIPT_CATEGORIES */
+  Bitmap128 enabled_categories; /* MUST be large enough to contain MAX_NUM_SCRIPT_CATEGORIES */
+
+  /* MUST be large enough to contain MAX_NUM_HOST_POOLS */
+  Bitmap128 enabled_host_pools;
 
  public:
-  RecipientQueues();
+  RecipientQueues(u_int16_t recipient_id);
   ~RecipientQueues();
 
   /**
@@ -63,7 +68,7 @@ class RecipientQueues {
   *
   * @return True if the enqueue succeeded, false otherwise
   */
-  bool enqueue(const AlertFifoItem* const notification);
+  bool enqueue(const AlertFifoItem* const notification, AlertEntity alert_entity);
   
   /**
   * @brief Sets the minimum severity for notifications to use this recipient
@@ -79,7 +84,15 @@ class RecipientQueues {
   *
   * @return
   */
-  inline void setEnabledCategories(u_int8_t _enabled_categories) { enabled_categories = _enabled_categories; };
+  inline void setEnabledCategories(Bitmap128 _enabled_categories) { enabled_categories = _enabled_categories; };
+
+  /**
+  * @brief Sets enabled host pools to use this recipient
+  * @param enabled_host_pools
+  *
+  * @return
+  */
+  inline void setEnabledHostPools(Bitmap128 _enabled_pools)       { enabled_host_pools = _enabled_pools; };
   
   /**
    * @brief Returns queue status (drops and uses)

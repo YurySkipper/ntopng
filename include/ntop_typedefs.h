@@ -230,6 +230,17 @@ typedef enum {
 typedef struct {
   AlertLevel alert_severity;
   AlertCategory alert_category;
+  union {
+    /* alert_entity_host */
+    struct {
+      u_int16_t host_pool;
+    } host;
+    /* alert_entity_flow */
+    struct {
+      u_int16_t cli_host_pool;
+      u_int16_t srv_host_pool;
+    } flow;
+  } pools;
   u_int32_t score;
   char *alert;
 } AlertFifoItem;
@@ -506,6 +517,7 @@ typedef enum {
   host_alert_score_threshold             = 17,
   host_alert_icmp_flood                  = 18,
   host_alert_pkt_threshold		 = 19,
+  host_alert_scan_detected               = 20,
 
   MAX_DEFINED_HOST_ALERT_TYPE, /* Leave it as last member */ 
   MAX_HOST_ALERT_TYPE = 32 /* Constrained by HostAlertBitmap */
@@ -542,6 +554,7 @@ typedef enum {
   host_check_score_threshold,
   host_check_icmp_flood,
   host_check_pkt_threshold,
+  host_check_scan_detection,
 
   NUM_DEFINED_HOST_CHECKS, /* Leave it as last member */ 
 } HostCheckID;

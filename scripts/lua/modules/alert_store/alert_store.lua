@@ -35,8 +35,8 @@ if (_SESSION) and (_SESSION["user"]) then
     user = _SESSION["user"]
 end
 
-local ALERT_SORTING_ORDER = "ntopng.cached.alert.%s.%s.sort_order.%s"
-local ALERT_SORTING_COLUMN = "ntopng.cached.alert.%s.%s.sort_column.%s"
+local ALERT_SORTING_ORDER = "ntopng.cache.alert.%s.%s.sort_order.%s"
+local ALERT_SORTING_COLUMN = "ntopng.cache.alert.%s.%s.sort_column.%s"
 
 local CSV_SEPARATOR = "|"
 
@@ -179,8 +179,8 @@ function alert_store:build_sql_cond(cond)
 
    local sql_op = tag_utils.tag_operators[cond.op]
 
-   -- Special case: l7_proto
-   if cond.field == 'l7_proto' and cond.value ~= 0 then
+   -- Special case: l7proto
+   if cond.field == 'l7proto' and cond.value ~= 0 then
       -- Search also in l7_master_proto, unless value is 0 (Unknown)
       sql_cond = string.format("(l7_proto %s %u %s l7_master_proto %s %u)",
          sql_op, cond.value, ternary(cond.op == 'neq', 'AND', 'OR'), sql_op, cond.value)
@@ -243,11 +243,24 @@ function alert_store:build_sql_cond(cond)
 
    -- Number
    elseif cond.value_type == 'number' then
-     sql_cond = string.format("%s %s %u", cond.field, sql_op, cond.value)
+      if cond.op == 'in' then
+         sql_cond = 'bitAnd(' .. cond.field .. ', ' .. cond.value .. ') = ' .. cond.value
+      elseif cond.op == 'nin' then
+         sql_cond = cond.field .. '!=' .. cond.value .. '/' .. cond.value
+      else
+         sql_cond = string.format("%s %s %u", cond.field, sql_op, cond.value)
+      end
 
    -- String
    else
-     sql_cond = string.format("%s %s '%s'", cond.field, sql_op, cond.value)
+      if cond.op == 'in' then
+         sql_cond = cond.field .. ' LIKE ' .. string.format("'%%%s%%'", cond.value)
+      elseif cond.op == 'nin' then
+         sql_cond = cond.field .. ' NOT LIKE ' .. string.format("'%%%s%%'", cond.value)
+      else
+         -- Any other operator
+         sql_cond = string.format("%s %s '%s'", cond.field, sql_op, cond.value)
+      end
    end
 
    return sql_cond
@@ -318,8 +331,8 @@ end
 --@brief Filter (engaged) alerts in lua) evaluating self:_where conditions
 function alert_store:eval_alert_cond(alert, cond)
 
-   -- Special case: l7_proto
-   if cond.field == 'l7_proto' and cond.value ~= 0 then
+   -- Special case: l7proto
+   if cond.field == 'l7proto' and cond.value ~= 0 then
       -- Search also in l7_master_proto, unless value is 0 (Unknown)
       if cond.op == 'neq' then
          return tag_utils.eval_op(alert['l7_proto'], cond.op, cond.value) and 
@@ -536,7 +549,7 @@ function alert_store:add_filter_condition_list(field, values, values_type)
       local value, op = self:strip_filter_operator(value_op)
 
       -- Value conversion for exceptions
-      if field == 'l7_proto' then
+      if field == 'l7proto' then
          if not tonumber(value) then
             -- Try converting l7 proto name to number
             value = interface.getnDPIProtoId(value)
@@ -871,7 +884,7 @@ function alert_store:has_alerts()
       res = interface.alert_store_query(q)
       has_historical_alerts = res and res[1] and res[1]["has_historical_alerts"] == "1" or false
    end
-   
+ 
    return has_historical_alerts
 end
 
@@ -1567,7 +1580,7 @@ function alert_store:build_csv_row(rnames, document)
 end
 
 function alert_store:build_csv_row_single_element(value)
-   return CSV_SEPARATOR .. self:escape_csv(tostring(value))
+   return CSV_SEPARATOR .. self:escape_csv(tostring(value or ""))
 end
 
 function alert_store:build_csv_row_multiple_elements(value, elements)

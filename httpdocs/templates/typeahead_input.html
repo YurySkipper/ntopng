@@ -3,7 +3,7 @@
   <div class="input-group">
       <button class="input-group-text"><i class="fas fa-search" aria-hidden="true"></i></button>
   {% for k,v in pairs(typeahead.parameters or {}) do %}
-    <input type="hidden" name="{{k}}" value="{{v}}" />
+      <input type="hidden" name="{{k}}" value="{{v}}" />
   {% end %}
     <input id="{{typeahead.base_id}}_query" type="hidden" name="{{typeahead.query_field}}" data-ays-ignore="true"/>
     <input id="{{typeahead.base_id}}_search_field" type="text" data-minlength="1" class="form-control search-query span2" placeholder="{{typeahead.query_title}}" data-provide="typeahead" autocomplete="off"/>
@@ -29,37 +29,144 @@
       }
     };
   }
+  let isButtonLinkClicked = false;
 
+  function linkButtonClicked(url) {
+      if (url == null || url == "") { return; }
+      isButtonLinkClicked = true;
+      window.location.replace(url);
+      //ntopng_url_manager.replace_url_and_reload(url);
+  }
   $('#{{typeahead.base_id}}_search_field').typeahead({
-    items: {*typeahead.max_items or 8*}, /* Max num of items, use "'all'" for unlimited */
-    source: function (query, process) {
+      items: {*typeahead.max_items or 8*}, /* Max num of items, use "'all'" for unlimited */
+      //item: "<li class='dropdown-item'></li>",
+      highlighter: function (item) {
+	  // <a href="#" class="dropdown-item">${item}</a>
+	  if (item == null || item == "") { return ""; }
+	  let query = `(${this.$element.val()})`;
+	  let regex = new RegExp(query, "gi");
+	  let itemHtml = item.replace(regex, "<strong>$1</strong>");
+          var parts = item.split('#');
+	  let printLinksButtons = (links) => {
+	      if (links == null) { return ""; }
+	      let linksButtons = [];
+	      links.forEach((l) => {
+		  let icon = "fa fas fa-link";
+		  if (l.icon != null) {
+		      icon = `fa fas fa-${l.icon}`;		      
+		  }
+		  if (l.url == null) {
+		      l.url = "";
+		  }
+		  let title = "";
+		  if (l.title != null) {
+		      title = `title='${l.title}'`
+		  }
+		  let b = `<button ${title} type="button" class="btn btn-sm btn-link" onClick="linkButtonClicked('${l.url}')"><i class="${icon}"></i></button>`;
+		  if (l.url == "") {
+		      b = `<span ${title} style="margin-right:4px;"><i class="text-muted ${icon}"></i></span>`;
+		  }
+		  linksButtons.push(b);
+	      });
+	      return linksButtons.join("");
+	  };
+	  let printBadges = (badges) => {
+	      if (badges == null) { return ""; }
+	      let badgesButtons = [];
+	      badges.forEach((bg) => {
+		  let title = "";
+		  if (bg.title != null) {
+		      title = `title='${bg.title}'`
+		  }
+		  let icon = "";
+		  if (bg.icon != null) {
+		      icon = `<i class="fa fas fa-${bg.icon}"></i>`;
+		  }
+		  let label = "";
+		  if (bg.label != null) {
+		      label = `<span ${title} class="badge bg-secondary">${icon}${bg.label} </span>`;
+		  } else {
+		      label = `<span ${title} class="badge bg-secondary">${icon}</span>`
+		  }
+		  let b = `
+${label}
+`;
+		  badgesButtons.push(b);
+	      });
+	      return badgesButtons.join("");
+	  }
+	  let allLinksButtons = this.linksElementsDict[item];
+	  let linksRight = allLinksButtons.filter((l) => l.url != null && l.url != "");
+	  let linksLeft = allLinksButtons.filter((l) => l.url == null || l.url == "");
+	  let linksRightButtonsHtml = printLinksButtons(linksRight);
+	  let linksLeftButtonsHtml = printLinksButtons(linksLeft);
+	  let badgesHtml = printBadges(this.badgesElementsDict[item]);
+	  // <div style="margin-left:-12px;margin-right:-22px;"class="btn-group float-begin">
+
+	  let html = `
+<div>
+  <div class="btn-group float-begin">
+    ${linksLeftButtonsHtml}
+  </div>
+  <label>
+    <a href="#" class="p-0 dropdown-item">${itemHtml}</a>
+  </label>
+  ${badgesHtml}
+  <div class="btn-group float-end">
+    ${linksRightButtonsHtml}
+  </div>
+</div>
+`;
+          return html;
+      },
+      linksElementsDict: {},
+      badgesElementsDict: {},
+      source: function (query, process) {
       /* Avoid this kind of queries which generates file path warnings into the ntopng log */
       if (query.startsWith(".")) return;
+	  let me = this;
 
       var _get = {};
     {% for k,v in pairs(typeahead.parameters or {}) do %}
       _get["{{k}}"] = "{{v}}";
     {% end %}
       _get["query"] = query;
+	  return $.get("{*typeahead.query_url*}", _get, function (data) {
+	      let elements = data.rsp.results;
+	      me.linksElementsDict = {};
+	      me.badgesElementsDict = {};
+	      let maxLinks = 0;
+	      elements.forEach((e) => {
+		  if (e.links != null) {
+		      //e.links.push({icon: "fas fa-search-minus", url: "ntop.org"});
+		      if (e.links.length > maxLinks) { maxLinks = e.links.length; }
+		      me.linksElementsDict[e.name] = e.links;
+		  } else { }
+		  //e.badges = [{label: "ipv6", title: "lkasd", icon: "laptop"}];
+		  if (e.badges != null) {
+		      me.badgesElementsDict[e.name] = e.badges;
+		  }
+	      });
+              var res = process(data.rsp.results);
+	      
+              var menu = res.$menu;
+              menu.click(function (e) { e.preventDefault(); });
+	      let currentWidth = $("li", menu).width();
+	      $("li", menu).width(currentWidth + 36 * maxLinks);
+	      if (data.rsp && data.rsp.results && data.rsp.results.length > 0) {
+		  $("li:last > a:empty", menu).remove();
+	      } else {
+		  $("li:last", menu)
+		      .attr("data-no-results", "")
+		      .html("<span style='padding-left:1em; cursor:default;'>No results found</span>");
 
-      return $.get("{*typeahead.query_url*}", _get, function (data) {
-        var res = process(data.results);
-        var menu = res.$menu;
-
-        menu.click(function (e) { e.preventDefault(); });
-
-        if (data.results && data.results.length > 0) {
-          /* Fix for empty item appearing in the list */
-          $("li:last a:empty", menu).remove();
-        } else {
-          $("li:last", menu)
-            .attr("data-no-results", "")
-            .html("<span style='padding-left:1em; cursor:default;'>No results found</span>");
-        }
-
+              }
         return res;
       });
-    }, afterSelect: function(item) {
+      }, afterSelect: function(item) {
+	  if (isButtonLinkClicked == true) {
+	      return;
+	  }
       if (! item.no_results) {
         var form = $("#{{typeahead.base_id}}_query")
           .val(item["{{typeahead.json_key}}"])

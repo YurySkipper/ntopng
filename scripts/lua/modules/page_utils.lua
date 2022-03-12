@@ -59,7 +59,7 @@ page_utils.menu_entries = {
     traffic_dashboard     = {key = "traffic_dashboard", i18n_title = "dashboard.traffic_dashboard", section = "dashboard", help_link = "https://www.ntop.org/guides/ntopng/web_gui/dashboard.html"},
     network_discovery     = {key = "network_discovery", i18n_title = "discover.network_discovery",  section = "dashboard"},
     traffic_report        = {key = "traffic_report",    i18n_title = "report.traffic_report",    section = "dashboard", help_link = "https://www.ntop.org/guides/ntopng/web_gui/report.html"},
-    db_explorer           = {key = "db_explorer", i18n_title = "db_explorer.historical_data_explorer", section = "dashboard", help_link = "https://www.ntop.org/guides/ntopng/clickhouse.html?#historical-flows-explorer"},
+    traffic_analysis      = {key = "traffic_analysis", i18n_title = "db_explorer.traffic_analysis", section = "dashboard", help_link = "https://www.ntop.org/guides/ntopng/clickhouse.html?#historical-flows-explorer"},
 
     -- Alerts
     detected_alerts       = {key = "detected_alerts", i18n_title = "show_alerts.detected_alerts", section = "alerts", help_link = "https://www.ntop.org/guides/ntopng/web_gui/alerts.html"},
@@ -68,7 +68,9 @@ page_utils.menu_entries = {
 
     -- Flows
     flows                 = {key = "flows", i18n_title = "flows", section = "flows", help_link = "https://www.ntop.org/guides/ntopng/web_gui/flows.html"},
+    active_flows          = {key = "active_flows", i18n_title = "active_flows", section = "flows" },
     flow_details          = {key = "flow_details", i18n_title = "flow_details.flow_details", section = "flows"},
+    db_explorer           = {key = "db_explorer", i18n_title = "db_explorer.historical_data_explorer", section = "flows", help_link = "https://www.ntop.org/guides/ntopng/clickhouse.html?#historical-flows-explorer"},
 
     -- Hosts
     hosts                 = {key = "hosts", i18n_title = "hosts", section = "hosts", help_link = "https://www.ntop.org/guides/ntopng/web_gui/hosts.html#"},
@@ -278,13 +280,18 @@ end
 
 -- #################################
 
-function page_utils.print_header(title)
+function page_utils.print_header(title, addLoginJS)
   local http_prefix = ntop.getHttpPrefix()
   local static_file_epoch = ntop.getStaticFileEpoch()..""
 
   local dark_mode = page_utils.is_dark_mode_enabled(_POST["toggle_theme"])
   local page_title = i18n("welcome_to", { product=info.product })
   local favicon_path = nil
+
+  local admin_lang = ntop.getPref("ntopng.user.admin.language")
+  local language = ternary(isEmptyString(admin_lang), "en", admin_lang)
+  local locale_path = dirs.installdir.."/scripts/locales/"..language..".lua"
+  local locale_when = ntop.fileLastChange(locale_path)
 
   if title ~= nil then
     page_title = info.product .. " - " .. title
@@ -298,21 +305,13 @@ function page_utils.print_header(title)
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <link href="]] print(http_prefix) print[[/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/css/minified/ntopng.min.css?]] print(static_file_epoch) print[[" rel="stylesheet"> ]]
-
+    <link href="]] print(http_prefix) print[[/dist/third-party.css" rel="stylesheet">
+    <link href="]] print(http_prefix) print[[/dist/ntopng.css" rel="stylesheet">
+    <link href="]] print(http_prefix) print[[/dist/white-mode.css" rel="stylesheet">]]
+    
     if (dark_mode) then
-      print[[<link href="]] print(http_prefix) print[[/css/minified/dark-mode.min.css?]] print(static_file_epoch) print[[" rel="stylesheet">]]
+      print[[<link href="]] print(http_prefix) print[[/dist/dark-mode.css?]] print(static_file_epoch) print[[" rel="stylesheet">]]
     end
-
-    print[[
-    <link href="]] print(http_prefix) print[[/fontawesome-free-5.11.2-web/css/all.min.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/css/minified/tempusdominus.min.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/css/minified/heatmap.min.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/css/minified/rickshaw.min.css" type="text/css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/css/dc.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/selectpicker/css/bootstrap-select.min.css" rel="stylesheet">
-    ]]
 
    if (ntop.isPro() or ntop.isnEdge()) and ntop.exists(dirs.installdir .. "/httpdocs/img/custom_favicon.ico") then
       favicon_path = ntop.getHttpPrefix().."/img/custom_favicon.ico"
@@ -324,28 +323,28 @@ function page_utils.print_header(title)
    end
 
    print[[
-   <style>
+    <style>
       .flag {
-         width: 16px;
-         height: 11px;
-         margin-top: -5px;
-         background:url(]] print(http_prefix) print[[/img/flags.png) no-repeat
+        width: 16px;
+        height: 11px;
+        margin-top: -5px;
+        background:url(]] print(http_prefix) print[[/dist/images/flags.png) no-repeat
       }
-   </style>
-    <link href="]] print(http_prefix) print[[/css/flags.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/css/pie-chart.css" rel="stylesheet">
-    <!-- http://kamisama.github.io/cal-heatmap/v2/ -->
-    <link href="]] print(http_prefix) print[[/css/nv.d3.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/css/custom_theme.css?]] print(static_file_epoch) print[[" rel="stylesheet">
-    <!--[if lt IE 9]>
-      <script src="]] print(http_prefix) print[[/js/html5shiv.js"></script>
-    <![endif]-->
-    <script type="text/javascript" src="]] print(http_prefix) print[[/js/jquery_bootstrap.min.js?]] print(static_file_epoch) print[["></script>
-    <script type="text/javascript" src="]] print(http_prefix) print[[/js/popper/popper.min.js" crossorigin="anonymous"></script>
-    <script type="text/javascript" src="]] print(http_prefix) print[[/js/deps.min.js?]] print(static_file_epoch) print[["></script>
-    <script type="text/javascript" src="]] print(http_prefix) print[[/js/ntop.min.js?]] print(static_file_epoch) print[["></script>
-    <script type="text/javascript" src="]] print(http_prefix) print[[/js/tempusdominus.min.js?]] print(static_file_epoch) print[["></script>
-   </head>]]
+    </style>
+
+    ]]
+          
+    if addLoginJS then
+      print[[<script type="text/javascript" src="]] print(http_prefix) print[[/dist/login.js"></script>]]
+    end
+
+    print[[
+    <link href="]] print(http_prefix) print[[/dist/custom-theme.css?]] print(static_file_epoch) print[[" rel="stylesheet">
+    <script type="text/javascript" src="]] print (ntop.getHttpPrefix()) print("/lua/locale.lua?user_language="..language.."&epoch="..locale_when); print[["> </script>
+    <script type="text/javascript" src="]] print(http_prefix) print[[/dist/third-party.js"></script>
+    <script type="text/javascript" src="]] print(http_prefix) print[[/dist/ntopng.js"></script>
+   
+    </head>]]
   print([[
      <body class="body ]].. (dark_mode and "dark" or "") ..[[">
   ]])
@@ -353,14 +352,19 @@ end
 
 -- #################################
 
-function page_utils.print_header_minimal(title)
+function page_utils.print_header_minimal(title, addLoginJS)
   local http_prefix = ntop.getHttpPrefix()
 
   local page_title = i18n("welcome_to", { product=info.product })
   if title ~= nil then
     page_title = info.product .. " - " .. title
   end
-
+  
+  local admin_lang = ntop.getPref("ntopng.user.admin.language")
+  local language = ternary(isEmptyString(admin_lang), "en", admin_lang)
+  local locale_path = dirs.installdir.."/scripts/locales/"..language..".lua"
+  local locale_when = ntop.fileLastChange(locale_path)
+  
   print [[
     <!DOCTYPE html>
     <html>
@@ -368,11 +372,9 @@ function page_utils.print_header_minimal(title)
         <title>]] print(page_title) print[[</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <link href="]] print(http_prefix) print[[/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-        <link href="]] print(http_prefix) print[[/fontawesome-free-5.11.2-web/css/fontawesome.css" rel="stylesheet">
-        <link href="]] print(http_prefix) print[[/fontawesome-free-5.11.2-web/css/brands.css" rel="stylesheet">
-        <link href="]] print(http_prefix) print[[/fontawesome-free-5.11.2-web/css/solid.css" rel="stylesheet">
 
+        <link href="]] print(http_prefix) print[[/dist/third-party.css" rel="stylesheet">
+        <link href="]] print(http_prefix) print[[/dist/ntopng.css" rel="stylesheet">
           ]]
 
          if (ntop.isPro() or ntop.isnEdge()) and ntop.exists(dirs.installdir .. "/httpdocs/img/custom_favicon.ico") then
@@ -385,19 +387,17 @@ function page_utils.print_header_minimal(title)
          end
 
          print[[
-
-        <script type="text/javascript" src="]] print(http_prefix) print[[/js/jquery_bootstrap.min.js?]] print(static_file_epoch) print[["></script>
-        <link type="text/css" rel="stylesheet" href="]] print(http_prefix) print[[/css/rickshaw.css">
-        <script src="]] print(http_prefix) print[[/js/validator.js"></script>
-        <style>
-        .flag {
-          width: 16px;
-          height: 11px;
-          margin-top: -5px;
-          background:url(]] print(http_prefix) print[[/img/flags.png) no-repeat
-        }
-        </style>
-        <link href="]] print(http_prefix) print[[/css/ntopng.css" rel="stylesheet">
+          <style>
+          .flag {
+            width: 16px;
+            height: 11px;
+            margin-top: -5px;
+            background:url(]] print(http_prefix) print[[/dist/images/flags.png) no-repeat
+          }
+          <script type="text/javascript" src="]] print (ntop.getHttpPrefix()) print("/lua/locale.lua?user_language="..language.."&epoch="..locale_when); print[["> </script>
+          <script type="text/javascript" src="]] print(http_prefix) print[[/dist/third-party.js"></script>
+          <script type="text/javascript" src="]] print(http_prefix) print[[/dist/ntopng.js"></script>
+          
       </head>
       <body>
 

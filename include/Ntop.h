@@ -515,7 +515,8 @@ class Ntop {
   void   recipient_stats(u_int16_t recipient_id, lua_State* vm);
   time_t recipient_last_use(u_int16_t recipient_id);
   void   recipient_delete(u_int16_t recipient_id);
-  void   recipient_register(u_int16_t recipient_id, AlertLevel minimum_severity, u_int8_t enabled_categories);
+  void   recipient_register(u_int16_t recipient_id, AlertLevel minimum_severity,
+                            Bitmap128 enabled_categories, Bitmap128 enabled_host_pools);
 
   void sendNetworkInterfacesTermination();
   inline time_t getLastStatsReset() { return(last_stats_reset); }

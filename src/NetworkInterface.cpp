@@ -813,7 +813,7 @@ NetworkInterface::~NetworkInterface() {
   for(it = external_alerts.begin(); it != external_alerts.end(); ++it)
     delete it->second;
   external_alerts.clear();
-  
+
 #ifdef NTOPNG_PRO
   if(policer)               delete(policer);
 #ifndef HAVE_NEDGE
@@ -1282,84 +1282,87 @@ NetworkInterface* NetworkInterface::getDynInterface(u_int64_t criteria, bool par
   NetworkInterface *sub_iface = NULL;
 #ifndef HAVE_NEDGE
   std::map<u_int64_t, NetworkInterface*>::iterator subIface = flowHashing.find(criteria);
+  char buf[64], buf1[48];
+  const char *vIface_type;
 
   if(subIface != flowHashing.end()) {
     sub_iface = subIface->second;
-  } else {
-    /* Interface not found */
+    return sub_iface;
+  }
 
-    if((numSubInterfaces < MAX_NUM_VIRTUAL_INTERFACES) &&
-       (ntop->get_num_interfaces() < MAX_NUM_DEFINED_INTERFACES)) {
-      char buf[64], buf1[48];
-      const char *vIface_type;
+  /* Interface not found */
 
-      switch(flowHashingMode) {
-	case flowhashing_vlan:
-	  vIface_type = CONST_INTERFACE_TYPE_VLAN;
-	  snprintf(buf, sizeof(buf), "%s [VLAN Id: %u]", ifname, (unsigned int)criteria);
-	  break;
+  if((numSubInterfaces >= MAX_NUM_VIRTUAL_INTERFACES) ||
+     (ntop->get_num_interfaces() >= MAX_NUM_DEFINED_INTERFACES)) {
+    static bool too_many_interfaces_error = false;
 
-	case flowhashing_probe_ip:
-	  vIface_type = CONST_INTERFACE_TYPE_FLOW;
-	  snprintf(buf, sizeof(buf), "%s [Probe IP: %s]", ifname, Utils::intoaV4((unsigned int)criteria, buf1, sizeof(buf1)));
-	  break;
-
-	case flowhashing_iface_idx:
-	  vIface_type = CONST_INTERFACE_TYPE_FLOW;
-	  snprintf(buf, sizeof(buf), "%s [IfIdx: %u]", ifname, (unsigned int)criteria);
-	  break;
-
-	case flowhashing_ingress_iface_idx:
-	  vIface_type = CONST_INTERFACE_TYPE_FLOW;
-	  snprintf(buf, sizeof(buf), "%s [InIfIdx: %u]", ifname, (unsigned int)criteria);
-	  break;
-
-	case flowhashing_probe_ip_and_ingress_iface_idx:
-	  {
-	    /* 64 bit value: upper 32 bit is nProbe IP, lower 32 bit ifIdx */
-	    u_int32_t nprobe_ip = (u_int32_t)(criteria >> 32);
-	    u_int32_t if_id     = (u_int32_t)(criteria & 0xFFFFFFFF);
-
-	    vIface_type = CONST_INTERFACE_TYPE_FLOW;
-	    snprintf(buf, sizeof(buf), "%s [Probe IP: %s][InIfIdx: %u]", ifname,
-		     Utils::intoaV4(nprobe_ip, buf1, sizeof(buf1)), if_id);
-	  }
-	  break;
-
-	case flowhashing_vrfid:
-	  vIface_type = CONST_INTERFACE_TYPE_FLOW;
-	  snprintf(buf, sizeof(buf), "%s [VRF Id: %u]", ifname, (unsigned int)criteria);
-	  break;
-
-	default:
-	  return(NULL);
-	  break;
-      }
-
-      if(dynamic_cast<ZMQParserInterface*>(this))
-        sub_iface = new (std::nothrow) ZMQParserInterface(buf, vIface_type);
-      else if(dynamic_cast<SyslogParserInterface*>(this))
-        sub_iface = new (std::nothrow) SyslogParserInterface(buf, vIface_type);
-      else
-        sub_iface = new (std::nothrow) NetworkInterface(buf, vIface_type);
-
-      if(sub_iface) {
-        if(!this->registerSubInterface(sub_iface, criteria)) {
-          ntop->getTrace()->traceEvent(TRACE_WARNING, "Failure registering sub-interface");
-
-	  /* NOTE: interface deleted by registerSubInterface */
-          sub_iface = NULL;
-        }
-      } else
-        ntop->getTrace()->traceEvent(TRACE_WARNING, "Failure allocating interface: not enough memory?");
-    } else {
-      static bool too_many_interfaces_error = false;
-
-      if(!too_many_interfaces_error) {
-	ntop->getTrace()->traceEvent(TRACE_WARNING, "Too many subinterfaces defined");
-	too_many_interfaces_error = true;
-      }
+    if(!too_many_interfaces_error) {
+      ntop->getTrace()->traceEvent(TRACE_WARNING, "Too many subinterfaces defined");
+      too_many_interfaces_error = true;
     }
+
+    return NULL;
+  }
+
+  switch(flowHashingMode) {
+    case flowhashing_vlan:
+      vIface_type = CONST_INTERFACE_TYPE_VLAN;
+      snprintf(buf, sizeof(buf), "%s [VLAN Id: %u]", ifname, (unsigned int)criteria);
+    break;
+
+    case flowhashing_probe_ip:
+      vIface_type = CONST_INTERFACE_TYPE_FLOW;
+      snprintf(buf, sizeof(buf), "%s [Probe IP: %s]", ifname, Utils::intoaV4((unsigned int)criteria, buf1, sizeof(buf1)));
+    break;
+
+    case flowhashing_iface_idx:
+      vIface_type = CONST_INTERFACE_TYPE_FLOW;
+      snprintf(buf, sizeof(buf), "%s [IfIdx: %u]", ifname, (unsigned int)criteria);
+    break;
+
+    case flowhashing_ingress_iface_idx:
+      vIface_type = CONST_INTERFACE_TYPE_FLOW;
+      snprintf(buf, sizeof(buf), "%s [InIfIdx: %u]", ifname, (unsigned int)criteria);
+    break;
+
+    case flowhashing_probe_ip_and_ingress_iface_idx:
+    {
+      /* 64 bit value: upper 32 bit is nProbe IP, lower 32 bit ifIdx */
+      u_int32_t nprobe_ip = (u_int32_t)(criteria >> 32);
+      u_int32_t if_id     = (u_int32_t)(criteria & 0xFFFFFFFF);
+
+      vIface_type = CONST_INTERFACE_TYPE_FLOW;
+      snprintf(buf, sizeof(buf), "%s [Probe IP: %s][InIfIdx: %u]", ifname,
+               Utils::intoaV4(nprobe_ip, buf1, sizeof(buf1)), if_id);
+    }
+    break;
+
+    case flowhashing_vrfid:
+      vIface_type = CONST_INTERFACE_TYPE_FLOW;
+      snprintf(buf, sizeof(buf), "%s [VRF Id: %u]", ifname, (unsigned int)criteria);
+    break;
+
+    default:
+      return(NULL);
+    break;
+  }
+
+  if(dynamic_cast<ZMQParserInterface*>(this))
+    sub_iface = new (std::nothrow) ZMQParserInterface(buf, vIface_type);
+  else if(dynamic_cast<SyslogParserInterface*>(this))
+    sub_iface = new (std::nothrow) SyslogParserInterface(buf, vIface_type);
+  else
+    sub_iface = new (std::nothrow) NetworkInterface(buf, vIface_type);
+
+  if(sub_iface == NULL) {
+    ntop->getTrace()->traceEvent(TRACE_WARNING, "Failure allocating interface: not enough memory?");
+    return NULL;
+  }
+
+  if(!this->registerSubInterface(sub_iface, criteria)) {
+    ntop->getTrace()->traceEvent(TRACE_WARNING, "Failure registering sub-interface");
+    sub_iface = NULL; /* NOTE: interface deleted by registerSubInterface */
+    return NULL;
   }
 #endif
 
@@ -1691,29 +1694,6 @@ bool NetworkInterface::processPacket(u_int32_t bridge_iface_idx,
     if(new_flow)
       flow->setIngress2EgressDirection(ingressPacket);
 #endif
-    /*
-      In case of a traffic mirror with no MAC gatewy address configured
-      the traffic direction is set based on the local (-m) host
-     */
-    if(isTrafficMirrored() && (!isGwMacConfigured())) {
-      int16_t network_id;
-      bool cli_local = flow->get_cli_ip_addr()->isLocalHost(&network_id);
-      bool srv_local = flow->get_srv_ip_addr()->isLocalHost(&network_id);
-
-      if(cli_local && (!srv_local))
-	ingressPacket = false;
-      else if((!cli_local) && srv_local)
-	ingressPacket = true;
-      else
-	; /* Leave as is */
-
-      /*
-      ntop->getTrace()->traceEvent(TRACE_NORMAL, "%s -> %s",
-				   flow->get_cli_ip_addr()->isLocalHost(&network_id) ? "L" : "R",
-				   flow->get_srv_ip_addr()->isLocalHost(&network_id) ? "L" : "R");
-      */
-    }
-
 
     if(flow->is_swap_requested()
        /* This guarantees that at least a packet has been observed in both directions, and that
@@ -1801,6 +1781,34 @@ bool NetworkInterface::processPacket(u_int32_t bridge_iface_idx,
 #endif
   }
 
+  /*
+    In case of a traffic mirror with no MAC gateway address configured
+    the traffic direction is set based on the local (-m) host
+  */
+  if(isTrafficMirrored() && (!isGwMacConfigured())) {
+    int16_t network_id;
+    bool cli_local = src_ip.isLocalHost(&network_id);
+    bool srv_local = dst_ip.isLocalHost(&network_id);
+
+    if(cli_local && (!srv_local))
+      ingressPacket = false;
+    else if((!cli_local) && srv_local)
+      ingressPacket = true;
+    else
+      ; /* Leave as is */
+
+#if 0
+    char a[32], b[32];
+    
+    ntop->getTrace()->traceEvent(TRACE_NORMAL, "%s (%s) -> %s (%s) [%s]",
+				 src_ip.print(a, sizeof(a)),
+				 src_ip.isLocalHost(&network_id) ? "L" : "R",
+				 dst_ip.print(b, sizeof(b)),
+				 dst_ip.isLocalHost(&network_id) ? "L" : "R",
+				 ingressPacket ? "IN" : "OUT");
+#endif
+  }
+
   /* Protocol Detection */
   flow->updateInterfaceLocalStats(src2dst_direction, 1, len_on_wire);
 
@@ -1816,7 +1824,6 @@ bool NetworkInterface::processPacket(u_int32_t bridge_iface_idx,
       // ntop->getTrace()->traceEvent(TRACE_WARNING, "IP fragments are not handled yet!");
     }
   }
-
 
   if(flow->isDetectionCompleted()
      && (!isSampledTraffic())) {
@@ -3009,7 +3016,7 @@ u_int64_t NetworkInterface::dequeueFlowsForDump(u_int idle_flows_budget, u_int a
 #endif
 
 #ifdef NTOPNG_PRO
-  /* Flush possibly pending flows (avoids interfaces with almost no traffic 
+  /* Flush possibly pending flows (avoids interfaces with almost no traffic
   to have their flows waiting in dump queues for too long) */
   //flushFlowDump();
 #endif
@@ -3025,7 +3032,13 @@ void NetworkInterface::flowAlertsDequeueLoop() {
 			       get_description(), get_id());
 
   /* Wait until it starts up */
-  while(!isRunning()) _usleep(10000);
+  while(!isRunning()) {
+    /* Control-C during startup */
+    if(ntop->getGlobals()->isShutdownRequested())
+      return;
+
+    _usleep(10000);
+  }
 
   /* Now operational */
   while(isRunning()) {
@@ -3056,7 +3069,13 @@ void NetworkInterface::hostAlertsDequeueLoop() {
 			       get_description(), get_id());
 
   /* Wait until it starts up */
-  while(!isRunning()) _usleep(10000);
+  while(!isRunning()) {
+    /* Control-C during startup */
+    if(ntop->getGlobals()->isShutdownRequested())
+      return;
+
+    _usleep(10000);
+  }
 
   /* Now operational */
   while(isRunning()) {
@@ -3087,7 +3106,13 @@ void NetworkInterface::dumpFlowLoop() {
 			       get_description(), get_id());
 
   /* Wait until it starts up */
-  while(!isRunning()) _usleep(10000);
+  while(!isRunning()) {
+    /* Control-C during startup */
+    if(ntop->getGlobals()->isShutdownRequested())
+      return;
+
+    _usleep(10000);
+  }
 
   /* Now operational */
   while(isRunning()) {
@@ -6072,12 +6097,12 @@ u_int NetworkInterface::purgeIdleMacsASesCountriesVLANs(bool force_idle, bool fu
     const struct timeval tv = periodicUpdateInitTime();
     u_int n;
     /* If the interface is no longer running it is safe to force all entries as idle */
-      
+
     n = (macs_hash ? macs_hash->purgeIdle(&tv, force_idle, full_scan) : 0)
       + (ases_hash ? ases_hash->purgeIdle(&tv, force_idle, full_scan) : 0)
       + (oses_hash ? oses_hash->purgeIdle(&tv, force_idle, full_scan) : 0)
       + (countries_hash ? countries_hash->purgeIdle(&tv, force_idle, full_scan) : 0)
-      + (vlans_hash ? vlans_hash->purgeIdle(&tv, force_idle, full_scan) : 0)  
+      + (vlans_hash ? vlans_hash->purgeIdle(&tv, force_idle, full_scan) : 0)
       + (obs_hash ? obs_hash->purgeIdle(&tv, force_idle, full_scan) : 0);
 
     next_idle_other_purge = last_packet_time + OTHER_PURGE_FREQUENCY;
@@ -6639,7 +6664,7 @@ bool NetworkInterface::deleteObsPoint(u_int16_t obs_point) {
   /* Observation Point found, delete it */
   if(ret != NULL)
     ret->deleteObsStats();
-  
+
   return(true);
 }
 
@@ -6657,7 +6682,7 @@ bool NetworkInterface::prepareDeleteObsPoint(u_int16_t obs_point) {
   /* Observation Point found, delete it */
   if(ret != NULL)
     ret->setDeleteRequested(true);
-  
+
   return(true);
 }
 
@@ -7136,7 +7161,7 @@ void NetworkInterface::FillObsHash() {
     char pattern[64];
     int rc = 0;
 
-    snprintf(pattern, sizeof(pattern), "ntopng.serialized_as.ifid_%u_obs_point_*", get_id()); 
+    snprintf(pattern, sizeof(pattern), "ntopng.serialized_as.ifid_%u_obs_point_*", get_id());
 
     // ntop->getTrace()->traceEvent(TRACE_INFO, "Pattern: %s", pattern);
 
@@ -7149,11 +7174,11 @@ void NetworkInterface::FillObsHash() {
           char symbol = '_';
           /* Get last occurrence of _ , because the key is serialized like ntopng.serialized_as.ifid_10_obs_point_1234 */
           /* In this way it's possible to get all the ids of the Obs. Points */
-          char *obs_point = strrchr(keys[i], symbol); 
+          char *obs_point = strrchr(keys[i], symbol);
 
-          if(obs_point) {            
+          if(obs_point) {
             u_int16_t obs_point_id = atoi(&obs_point[1]);
-            
+
             if(!obs_point_id) {
               ntop->getTrace()->traceEvent(TRACE_ERROR, "Failed to deserialize Observation Point stats: %u", obs_point_id);
               if(keys[i]) free(keys[i]);
@@ -7163,9 +7188,9 @@ void NetworkInterface::FillObsHash() {
             /* Found at least one element */
             /* Create a new observation point with the id found to deserialize stats */
             ObservationPoint *tmp_obs_point = new ObservationPoint(this, obs_point_id);
-            
+
             last_obs_point_id = obs_point_id;
-            /* Add to the map */ 
+            /* Add to the map */
             if(obs_hash->add(tmp_obs_point, false /* Do lock */))
               ntop->getTrace()->traceEvent(TRACE_NORMAL, "Found Observation Point: %u; Stats deserialization complete.", obs_point_id);
             else
@@ -8333,16 +8358,12 @@ bool NetworkInterface::initFlowDump(u_int8_t num_dump_interfaces) {
       if(ntop->getPrefs()->useClickHouse())
 	db = new (std::nothrow) ClickHouseFlowDB(this);
 #endif
-
-      if((db == NULL)
-	 && ntop->getPrefs()->is_enterprise_m_edition())
-	db = new (std::nothrow) BatchedMySQLDB(this);
 #endif
 #endif
 
 #ifdef HAVE_MYSQL
       if(db == NULL)
-	db = new (std::nothrow) MySQLDB(this, false /* !clickhouse */);
+	db = new (std::nothrow) MySQLDB(this);
 #endif
 
       if(!db) throw "Not enough memory";
@@ -9189,48 +9210,63 @@ void NetworkInterface::getEngagedAlerts(lua_State *vm, AlertEntity alert_entity,
 /* *************************************** */
 
 void NetworkInterface::processExternalAlertable(AlertEntity entity,
-						const char *entity_val, bool create_if_missing,
+						const char *entity_val,
 						lua_State* vm, u_int vm_argument_idx,
 						bool do_store_alert) {
   std::map<std::pair<AlertEntity, std::string>, InterfaceMemberAlertableEntity*>::iterator it;
   std::pair<AlertEntity, std::string> key(entity, std::string(entity_val));
-  InterfaceMemberAlertableEntity *alertable;
+  InterfaceMemberAlertableEntity *alertable = NULL;
 
   external_alerts_lock.lock(__FILE__, __LINE__);
 
-  if((it = external_alerts.find(key)) != external_alerts.end()) {
-    external_alerts_lock.unlock(__FILE__, __LINE__);
-    lua_pushnil(vm);
-    return;
-  }
+  /* Lookup */
+  if((it = external_alerts.find(key)) != external_alerts.end())
+    alertable = it->second;
 
-  if(!create_if_missing) {
-    external_alerts_lock.unlock(__FILE__, __LINE__);
-    lua_pushnil(vm);
-    return;
-  }
+  if (alertable) {
+    /* Already present */
 
-  /* Create */
-  if((alertable = new (std::nothrow) InterfaceMemberAlertableEntity(this, entity)) == NULL) {
-    external_alerts_lock.unlock(__FILE__, __LINE__);
-    ntop->getTrace()->traceEvent(TRACE_ERROR, "Not enough memory");
-    lua_pushnil(vm);
-    return;
-  }
-  
-  alertable->setEntityValue(entity_val);
+    if (do_store_alert) {
+      /* Nothing to store - return */
+      external_alerts_lock.unlock(__FILE__, __LINE__);
+      lua_pushnil(vm);
+      return;
+    }
 
-  /* Add to the map */
-  external_alerts[key] = alertable;
+  } else {
+    /* Not present */
+
+    if (!do_store_alert) {
+      /* Nothing to release - return */
+      external_alerts_lock.unlock(__FILE__, __LINE__);
+      lua_pushnil(vm);
+      return;
+    }
+
+    /* Create */
+    alertable = new (std::nothrow) InterfaceMemberAlertableEntity(this, entity);
+    if (alertable == NULL) {
+      external_alerts_lock.unlock(__FILE__, __LINE__);
+      ntop->getTrace()->traceEvent(TRACE_ERROR, "Not enough memory");
+      lua_pushnil(vm);
+      return;
+    }
+
+    alertable->setEntityValue(entity_val);
+
+    /* Add to the map */
+    external_alerts[key] = alertable;
+  }
 
   if(do_store_alert)
     ntop_store_triggered_alert(vm, alertable, vm_argument_idx);
-  else
+  else {
     ntop_release_triggered_alert(vm, alertable, vm_argument_idx);
 
-  if(alertable->getNumEngagedAlerts() == 0) {
-    external_alerts.erase(key);
-    delete alertable;
+    if(alertable->getNumEngagedAlerts() == 0) {
+      external_alerts.erase(key);
+      delete alertable;
+    }
   }
 
   external_alerts_lock.unlock(__FILE__, __LINE__);
@@ -9536,15 +9572,15 @@ bool NetworkInterface::hasObservationPointId(u_int16_t pointId) {
 }
 
 /* *************************************** */
-  
-bool NetworkInterface::haveObservationPointsDefined() { 
-  return(((!obs_hash) || (obs_hash->getNumEntries() == 0)) ? false : true); 
+
+bool NetworkInterface::haveObservationPointsDefined() {
+  return(((!obs_hash) || (obs_hash->getNumEntries() == 0)) ? false : true);
 }
 
 /* *************************************** */
 
-u_int16_t NetworkInterface::getFirstObservationPointId() { 
-  return(((!obs_hash) || (obs_hash->getNumEntries() == 0)) ? 0 : last_obs_point_id); 
+u_int16_t NetworkInterface::getFirstObservationPointId() {
+  return(((!obs_hash) || (obs_hash->getNumEntries() == 0)) ? 0 : last_obs_point_id);
 }
 
 /* *************************************** */

@@ -419,7 +419,7 @@ run_tests() {
                 # Remove old conflicts if any
                 rm -f conflicts/${TEST}.out
             else
-                # Computing diff between old and new JSON
+                # Computing diff between old and new JSON (unsorted)
                 diff --side-by-side --suppress-common-lines --ignore-all-space <(cat ${FORMATTED_OLD_OUT}) <(cat ${FORMATTED_NEW_OUT}) >"${OUT_DIFF}"
                 filter_json "${OUT_DIFF}" "${IGNORE}"
 

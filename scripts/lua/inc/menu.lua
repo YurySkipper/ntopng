@@ -38,13 +38,7 @@ print([[
    <div class='wrapper'>
 ]])
 
-local admin_lang = ntop.getPref("ntopng.user.admin.language")
-local language = ternary(isEmptyString(admin_lang), "en", admin_lang)
-local locale_path = dirs.installdir.."/scripts/locales/"..language..".lua"
-local locale_when = ntop.fileLastChange(locale_path)
-
 print[[
-<script type="text/javascript" src="]] print (ntop.getHttpPrefix()) print("/lua/locale.lua?user_language="..language.."&epoch="..locale_when); print[["> </script>
 <script type='text/javascript'>
 
    const isAdministrator = ]] print(is_admin) print[[;
@@ -193,6 +187,11 @@ else
 	    entry = page_utils.menu_entries.traffic_dashboard,
 	    url = ntop.isPro() and '/lua/pro/dashboard.lua' or '/lua/index.lua',
          },
+	 {
+	    entry = page_utils.menu_entries.traffic_analysis,
+	    hidden = not ntop.isEnterprise() or (not prefs.is_dump_flows_to_clickhouse_enabled) or ifs.isViewed or not auth.has_capability(auth.capabilities.historical_flows),
+	    url = "/lua/pro/db_search.lua?page=analysis",
+	 },
          {
             entry = page_utils.menu_entries.divider,
          },
@@ -205,11 +204,6 @@ else
 	    entry = page_utils.menu_entries.traffic_report,
 	    hidden = not ntop.isPro(),
 	    url = "/lua/pro/report.lua",
-	 },
-	 {
-	    entry = page_utils.menu_entries.db_explorer,
-	    hidden = not ntop.isEnterprise() or (not prefs.is_dump_flows_to_clickhouse_enabled) or ifs.isViewed or not auth.has_capability(auth.capabilities.historical_flows),
-	    url = "/lua/pro/db_search.lua",
 	 },
       },
    })
@@ -228,13 +222,21 @@ else
    -- ##############################################
 
    -- Flows
-   page_utils.add_menubar_section(
-      {
-         hidden = is_system_interface,
-	 section = page_utils.menu_sections.flows,
-	 url = "/lua/flows_stats.lua",
+   page_utils.add_menubar_section({
+      section = page_utils.menu_sections.flows,
+      hidden = is_system_interface,
+      entries = {
+	 {
+	    entry = page_utils.menu_entries.active_flows,
+	    url = "/lua/flows_stats.lua",
+	 },
+	 {
+	    entry = page_utils.menu_entries.db_explorer,
+            hidden = not ntop.isEnterprise() or (not prefs.is_dump_flows_to_clickhouse_enabled) or ifs.isViewed or not auth.has_capability(auth.capabilities.historical_flows),
+	    url = "/lua/pro/db_search.lua",
+	 },
       }
-   )
+   })
 
    -- ##############################################
 
@@ -926,7 +928,7 @@ print(template_utils.gen("pages/components/ifaces-dropdown.template", context))
 if not is_pcap_dump and not is_system_interface then
 
    print([[
-      <li class='nav-item d-none d-sm-done d-md-flex d-lg-flex ms-2'>
+      <li class='nav-item d-none d-sm-done d-md-flex d-lg-flex p-2'>
          <div class='info-stats'>
             ]].. page_utils.generate_info_stats() ..[[
          </div>
@@ -965,7 +967,7 @@ end
 -- ########################################
 -- Network Load
 print([[
-   <li class="network-load d-none d-lg-inline"></li>
+   <li class="network-load d-none d-lg-inline py-2"></li>
 ]])
 
 -- ########################################
@@ -973,7 +975,7 @@ print([[
 print('</ul>')
 
 print([[
-<ul class='navbar-nav flex-row ms-auto'>
+<ul class='navbar-nav flex-row ms-auto my-2'>
 ]])
 
 -- ########################################
@@ -991,9 +993,9 @@ if (not is_system_interface) then
                json_key    = "ip",
                query_field = "host",
                class       = "typeahead-dropdown-right",
-               query_url   = ntop.getHttpPrefix() .. "/lua/find_host.lua",
+               query_url   = ntop.getHttpPrefix() .. "/lua/rest/v2/get/host/find.lua",
                query_title = i18n("search_host"),
-               style       = "width: 16em;",
+               style       = "width: 20rem",
                before_submit = [[NtopUtils.makeFindHostBeforeSubmitCallback("]] .. ntop.getHttpPrefix() .. [[")]],
                max_items   = "'all'" --[[ let source script decide ]],
                parameters  = { ifid = ternary(is_system_interface, getSystemInterfaceId(), ifId) },
@@ -1025,10 +1027,10 @@ local is_no_login_user = isNoLoginUser()
 
 print([[
    <li class="nav-item dropdown">
-      <a href='#' class="nav-link dropdown-toggle mx-2 dark-gray" id='navbar-user-dropdown-link' role="button" data-bs-reference="parent" data-bs-toggle="dropdown" aria-expanded="false">
+      <a href='#' class="nav-link dropdown-toggle dark-gray" id='manage-user-dropdown' role="button" data-bs-toggle="dropdown" aria-expanded="false">
          <i class='fas fa-user'></i>
       </a>
-      <ul class="dropdown-menu dropdown-menu-lg-end" aria-labelledby='navbar-user-dropdown-link'>]])
+      <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-lg-end" aria-labelledby='manage-user-dropdown'>]])
 
 if (not _SESSION["localuser"] or not is_admin) and (not is_no_login_user) then
    print[[

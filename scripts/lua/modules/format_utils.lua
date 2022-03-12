@@ -245,20 +245,17 @@ function format_utils.formatEpoch(epoch, full_time)
   end
 end
 
--- shorten an epoch when there is a well defined interval
-function format_utils.formatEpochShort(epoch_begin, epoch_end, epoch)
-   local begin_day = os.date("!%d", (epoch_begin or os.time()) + getFrontendTzSeconds())
-   local end_day = os.date("!%d", (epoch_end or os.time()) + getFrontendTzSeconds())
+function format_utils.formatPastEpochShort(input_epoch)
+   local epoch_now = os.time()
+   local epoch = input_epoch or epoch_now
+   local day = os.date("!%d", epoch + getFrontendTzSeconds())
+   local day_now = os.date("!%d", epoch_now + getFrontendTzSeconds())
 
-   if begin_day == end_day then
-      return os.date("!%X", (epoch or os.time()) + getFrontendTzSeconds())
+   if day == day_now then
+      return os.date("!%X", epoch + getFrontendTzSeconds())
    end
 
    return format_utils.formatEpoch(epoch)
-end
-
-function format_utils.formatPastEpochShort(epoch)
-   return format_utils.formatEpochShort(epoch, os.time(), epoch)
 end
 
 -- See also format_utils.msToTime
@@ -407,7 +404,7 @@ function format_utils.formatMainAddressCategory(host)
 
    if host ~= nil then      
       if(host["country"] and not isEmptyString(host["country"])) then
-	 addr_category = addr_category .. " <a href='".. ntop.getHttpPrefix() .. "/lua/hosts_stats.lua?country="..host.country.."'><img src='".. ntop.getHttpPrefix() .. "/img/blank.gif' class='flag flag-".. string.lower(host.country) .."'></a>"
+	 addr_category = addr_category .. " <a href='".. ntop.getHttpPrefix() .. "/lua/hosts_stats.lua?country="..host.country.."'><img src='".. ntop.getHttpPrefix() .. "/dist/images/blank.gif' class='flag flag-".. string.lower(host.country) .."'></a>"
       end
       
       if(host["is_blacklisted"] == true) then

@@ -53,17 +53,23 @@ local is_nedge = ntop.isnEdge()
 --    [hosts] 127.0.0.1   1.2.3.4
 --
 local BUILTIN_LISTS = {
-   ["ntop IP Malware Meltdown"] = {
-      url = "http://blacklists.ntop.org/blacklist-ip.txt",
+   ["dshield 7 days"] = {
+      url = "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/dshield_7d.netset",
+      category = CUSTOM_CATEGORY_MALWARE,
+      format = "ip",
+      enabled = true,
+      update_interval = DEFAULT_UPDATE_INTERVAL,
+   }, ["AlienVault"] = {
+      url = "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/alienvault_reputation.ipset",
       category = CUSTOM_CATEGORY_MALWARE,
       format = "ip",
       enabled = false,
       update_interval = DEFAULT_UPDATE_INTERVAL,
-   }, ["ntop Host Malware Meltdown"] = {
-      url = "http://blacklists.ntop.org/blacklist-hostnames.txt",
+   }, ["Feodo"] = {
+      url = "https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.txt",
       category = CUSTOM_CATEGORY_MALWARE,
-      format = "domain",
-      enabled = false,
+      format = "ip",
+      enabled = true,
       update_interval = DEFAULT_UPDATE_INTERVAL,
    }, ["Emerging Threats"] = {
       url = "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt",
@@ -89,6 +95,12 @@ local BUILTIN_LISTS = {
       format = "ip",
       enabled = true,
       update_interval = SIXH_DOWNLOAD_INTERVAL,
+   }, ["URLhaus"] = {
+      url = "https://urlhaus.abuse.ch/downloads/hostfile/",
+      category = CUSTOM_CATEGORY_MALWARE,
+      format = "domain",
+      enabled = true,
+      update_interval = DEFAULT_UPDATE_INTERVAL,
    }, ["Anti-WebMiner"] = {
       url = "https://raw.githubusercontent.com/greatis/Anti-WebMiner/master/hosts",
       category = CUSTOM_CATEGORY_MINING,
@@ -782,6 +794,11 @@ end
 -- ##############################################
 
 function lists_utils.startup()
+   if ntop.isOffline() then
+      traceError(TRACE_NORMAL, TRACE_CONSOLE, "Category lists not loaded (offline)")
+      return
+   end
+
    traceError(TRACE_NORMAL, TRACE_CONSOLE, "Refreshing category lists...")
 
    lists_utils.downloadLists()

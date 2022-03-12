@@ -74,7 +74,7 @@ bool Recipients::enqueue(u_int16_t recipient_id, const AlertFifoItem* const noti
      Perform the actual enqueue
    */
   if(recipient_queues[recipient_id])
-    res = recipient_queues[recipient_id]->enqueue(notification);
+    res = recipient_queues[recipient_id]->enqueue(notification, alert_entity_other /* TODO */);
 
   m.unlock(__FILE__, __LINE__);
 
@@ -96,7 +96,9 @@ bool Recipients::enqueue(const AlertFifoItem* const notification, AlertEntity al
    */
   for(int recipient_id = 0; recipient_id < MAX_NUM_RECIPIENTS; recipient_id++) {
     if(recipient_queues[recipient_id]) {
-      bool success = recipient_queues[recipient_id]->enqueue(notification);
+      bool success;
+
+      success = recipient_queues[recipient_id]->enqueue(notification, alert_entity);
       
       res &= success;
     }
@@ -109,18 +111,21 @@ bool Recipients::enqueue(const AlertFifoItem* const notification, AlertEntity al
 
 /* *************************************** */
 
-void Recipients::register_recipient(u_int16_t recipient_id, AlertLevel minimum_severity, u_int8_t enabled_categories) {  
+void Recipients::register_recipient(u_int16_t recipient_id, AlertLevel minimum_severity, 
+                                    Bitmap128 enabled_categories, Bitmap128 enabled_host_pools) {
   if(recipient_id >= MAX_NUM_RECIPIENTS)
     return;
 
   m.lock(__FILE__, __LINE__);
 
   if(!recipient_queues[recipient_id])
-    recipient_queues[recipient_id] = new (nothrow) RecipientQueues();
+    recipient_queues[recipient_id] = new (nothrow) RecipientQueues(recipient_id);
 
-  if(recipient_queues[recipient_id])
-    recipient_queues[recipient_id]->setMinimumSeverity(minimum_severity),
-      recipient_queues[recipient_id]->setEnabledCategories(enabled_categories);
+  if(recipient_queues[recipient_id]) {
+    recipient_queues[recipient_id]->setMinimumSeverity(minimum_severity);
+    recipient_queues[recipient_id]->setEnabledCategories(enabled_categories);
+    recipient_queues[recipient_id]->setEnabledHostPools(enabled_host_pools);
+  }
 
   // ntop->getTrace()->traceEvent(TRACE_WARNING, "registered [%u][%u][%u]", recipient_id, minimum_severity, enabled_categories);
 

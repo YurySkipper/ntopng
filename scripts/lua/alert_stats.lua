@@ -285,6 +285,13 @@ if endpoint_list then
    endpoint_list = ntop.getHttpPrefix() .. endpoint_list
 end
 
+local prefs = ntop.getPrefs()
+if ((page == "flow") and prefs.is_dump_flows_to_clickhouse_enabled) then   
+   download_endpoint_list = ntop.getHttpPrefix() .. "/lua/rest/v2/get/alert/download_alerts.lua"
+else
+   download_endpoint_list = endpoint_list
+end
+
 page_utils.set_active_menu_entry(page_utils.menu_entries.detected_alerts)
 
 -- append the menu above the page
@@ -532,7 +539,7 @@ local cached_sorting = ntop.getCache(ALERT_SORTING_ORDER)
 local cached_column = ntop.getCache(ALERT_SORTING_COLUMN)
 
 if isEmptyString(cached_sorting) then
-   cached_sorting = "asc"
+   cached_sorting = "desc"
 end
 
 if isEmptyString(cached_column) then
@@ -612,7 +619,7 @@ local datatable = {
    order_sorting = cached_sorting,
    modals = modals,
    download = {
-      endpoint = endpoint_list,
+      endpoint = download_endpoint_list,
       filename = "alerts.txt",
       format = "txt",
       i18n = i18n('show_alerts.download_alerts'),
@@ -719,7 +726,7 @@ local context = {
    }
 }
 
-template_utils.render("pages/components/datatable.template.html", context)
+template_utils.render("pages/components/datatable.template", context)
 
 -- append the menu down below the page
 dofile(dirs.installdir .. "/scripts/lua/inc/footer.lua")

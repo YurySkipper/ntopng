@@ -2282,6 +2282,18 @@ end
 
 -- ##############################################
 
+function getLocalNetworkLabel(network)
+   local alias = getLocalNetworkAlias(network)
+
+   if alias ~= network then
+      return string.format("%s  · %s", alias, network)
+   end
+
+   return network
+end
+
+-- ##############################################
+
 function getFullLocalNetworkName(network)
    local alias = getLocalNetworkAlias(network)
 
@@ -2395,12 +2407,17 @@ end
 function hostkey2hostinfo(key)
   local host = {}
   local info = split(key,"@")
-  if(info[1] ~= nil) then host["host"] = info[1]           end
+
+  if(info[1] ~= nil) then
+    host["host"] = info[1]
+  end
+
   if(info[2] ~= nil) then
     host["vlan"] = tonumber(info[2])
   else
     host["vlan"] = 0
   end
+
   return host
 end
 
@@ -2972,7 +2989,7 @@ function getFlag(country)
    if((country == nil) or (country == "")) then
       return("")
    else
-      return(" <a href='" .. ntop.getHttpPrefix() .. "/lua/hosts_stats.lua?country=".. country .."'><img src='".. ntop.getHttpPrefix() .. "/img/blank.gif' class='flag flag-".. string.lower(country) .."'></a> ")
+      return(" <a href='" .. ntop.getHttpPrefix() .. "/lua/hosts_stats.lua?country=".. country .."'><img src='".. ntop.getHttpPrefix() .. "/dist/images/blank.gif' class='flag flag-".. string.lower(country) .."'></a> ")
    end
 end
 
@@ -3155,12 +3172,17 @@ function get_symbolic_mac(mac_address, no_href, add_extra_info)
 	    else
 	       return '<a href="' .. ntop.getHttpPrefix() .. '/lua/mac_details.lua?host='..mac_address..'">' .. get_mac_classification(m) .. ":" .. t .. '</a>'
 	    end
-	 else
-	    if(add_extra_info == true) then
-	       return(get_mac_classification(m).."_"..t.." ("..macInfo(mac_address)..")")
-	    else
-	       return(get_mac_classification(m).."_"..t)
-	    end
+	 else                                                                                                                                                                                      
+    local href = ""                                                                                                                                                                                            
+    if not no_href then                                                                                                                                                                                        
+      href = '<a href="' .. ntop.getHttpPrefix() .. '/lua/mac_details.lua?host='..mac_address..'">'                                                                                                              
+    end    
+	  
+    if(add_extra_info == true) then
+      return(href .. get_mac_classification(m).."_"..t.." ("..macInfo(mac_address)..")" .. "</a>")
+    else
+      return(href .. get_mac_classification(m).."_"..t  .. "</a>")
+    end
 	 end
       end
    end
@@ -3312,36 +3334,43 @@ end
 
 -- ##########################################
 
-function historicalProtoHostHref(ifId, host, l4_proto, ndpi_proto_id, info)
-   if ntop.isPro() then
-      local now    = os.time()
-      local ago1h  = now - 3600
+function historicalProtoHostHref(ifId, host, l4_proto, ndpi_proto_id, info, vlan, no_print)
+   if ntop.isEnterpriseM() then
+    local now    = os.time()
+    local ago1h  = now - 3600
 
-      local prefs = ntop.getPrefs()
-      if prefs.is_dump_flows_to_clickhouse_enabled then
-	 local hist_url = ntop.getHttpPrefix().."/lua/pro/db_search.lua?"
-	 local params = {epoch_end = now, epoch_begin = ago1h, ifid = ifId}
+    local prefs = ntop.getPrefs()
+    if prefs.is_dump_flows_to_clickhouse_enabled then
+      local hist_url = ntop.getHttpPrefix().."/lua/pro/db_search.lua?"
+      local params = {epoch_end = now, epoch_begin = ago1h, ifid = ifId}
 
-	 if host then
-	    local host_k = hostinfo2hostkey(host)
-	    if isEmptyString(host_k) then
-	       host_k = host
-	    end
-	    params["ip"] = host_k..";eq"
-	 end
-	 if l4_proto then
-	    params["l4proto"] = l4_proto..";eq"
-	 end
-	 if ndpi_proto_id then
-	    params["l7proto"] = ndpi_proto_id..";eq"
-	 end
+        if host then
+            local host_k = hostinfo2hostkey(host)
+            if isEmptyString(host_k) then
+              host_k = host
+            end
+            params["ip"] = host_k..";eq"
+        end
+        if l4_proto then
+            params["l4proto"] = l4_proto..";eq"
+        end
+        if ndpi_proto_id then
+            params["l7proto"] = ndpi_proto_id..";eq"
+        end
+        if vlan and vlan ~= 0 then
+            params["vlan_id"] = vlan..";eq"
+        end
 
-	 local url_params = table.tconcat(params, "=", "&")
+        local url_params = table.tconcat(params, "=", "&")
 
-	 print('&nbsp;')
-	 -- print('<span class="badge bg-info">')
-	 print('<a href="'..hist_url..url_params..'" title="'..i18n("db_explorer.last_hour_flows")..'"><i class="fas fa-search-plus"></i></a>')
-	 -- print('</span>')
+        if not no_print then
+          print('&nbsp;')
+          -- print('<span class="badge bg-info">')
+          print('<a href="'..hist_url..url_params..'" title="'..i18n("db_explorer.last_hour_flows")..'"><i class="fas fa-search-plus"></i></a>')
+          -- print('</span>')
+        else
+          return '<a href="'..hist_url..url_params..'" title="'..i18n("db_explorer.last_hour_flows")..'"><i class="fas fa-search-plus"></i></a>'
+        end
       end
    end
 end

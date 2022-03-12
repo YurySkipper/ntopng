@@ -95,9 +95,8 @@ if auth.has_capability(auth.capabilities.preferences) then
          local ok, message = influxdb.init(_POST["influx_dbname"], url, tonumber(_POST["influx_retention"]),
             username, password, false --[[verbose]])
          if not ok then
-            -- NOTE: already logged
-            --~ message_info = message
-            --~ message_severity = "alert-danger"
+            message_info = message
+            message_severity = "alert-danger"
 
             -- reset driver to the old one
             _POST["timeseries_driver"] = nil
@@ -361,7 +360,7 @@ function printTelemetry()
    multipleTableButtonPrefs(subpage_active.entries["toggle_send_telemetry_data"].title,
 			    subpage_active.entries["toggle_send_telemetry_data"].description,
 			    t_labels, t_values,
-			    "", -- leave the default empty so one is forced to either chose opt-in or opt-out
+			    "0",
 			    "primary", "toggle_send_telemetry_data", "ntopng.prefs.send_telemetry_data", nil,
 			    elementToSwitch, showElementArray, nil, true--[[show]])
 
@@ -1474,23 +1473,7 @@ print[[
        <table class="table">
          <col width="20%">
          <col width="80%">
-         <tr><td style="padding-right: 20px;">]]
-
-print(
-   template.gen("typeahead_input.html", {
-		   typeahead={
-		      base_id     = "prefs_search",
-		      action      = ntop.getHttpPrefix() .. "/lua/admin/prefs.lua",
-		      json_key    = "tab",
-		      query_field = "tab",
-		      query_url   = ntop.getHttpPrefix() .. "/lua/find_prefs.lua",
-		      query_title = i18n("prefs.search_preferences"),
-		      style       = "width:20em; margin:auto; margin-top: 0.4em; margin-bottom: 1.5em;",
-		   }
-   })
-)
-
-print[[
+         <tr><td style="padding-right: 20px;">
            <div class="list-group">]]
 
 printMenuSubpages(tab)
