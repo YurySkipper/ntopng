@@ -3895,9 +3895,9 @@ local lang = {
   ["manage_configurations"] = {
     ["active_monitoring"] = "Активный мониторинг",
     ["after_behavior_changes"] = "<b>Restart</b> %{product} чтобы сохранить изменения в состоянии поведения.",
-    ["after_reset_request"] = "<b>Restart</b> %{product} to make the configuration factory reset effective.",
+    ["after_reset_request"] = "<b>Restart</b> %{product} чтобы сбросить конфигурацию в исходные заводские настройки",
     ["checks"] = "Проверки",
-    ["config_import"] = "Import <span class='item'>{{ type }}</span> Configuration",
+    ["config_import"] = "Импортировать <span class='item'>{{ type }}</span> Конфигурацию",
     ["everything"] = "Entire %{product} configuration (includes users, preferences, and all configurations below)",
     ["export_policy"] = "Export nProbe IPS Policy",
     ["infrastructure_instances"] = "Infrastructure Instances",
