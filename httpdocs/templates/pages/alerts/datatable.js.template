@@ -7,7 +7,7 @@ const FAMILY = "{{ entity }}"
 
 $table.on('click', `a[href='#check_info']`, function (e) {
     const alert = $table.row($(this).parent().parent().parent().parent()).data();
-    const href = "{* alert_details_url *}?page={* entity *}&status={* alert_status *}&row_id=" + alert.row_id;
+    const href = "{* alert_details_url *}?page={* entity *}&status={* alert_status *}&row_id=" + alert.row_id + "&tstamp=" + alert.tstamp.value;
     window.location.href = href;
 });
 
@@ -38,6 +38,10 @@ $table.on('click', `a[href='#flow_alerts']`, function (e) {
         flow_search_params["srv_ip"] = alert_ip;
     } else { /* Client alert or unkown cli/srv role */
         flow_search_params["cli_ip"] = alert_ip;
+    }
+
+    if(alert.vlan_id && alert.vlan_id != "") {
+        flow_search_params["vlan_id"] = alert.vlan_id + "{{ require("tag_utils").SEPARATOR }}eq";
     }
 
     flow_alerts_url.search = new URLSearchParams(flow_search_params);

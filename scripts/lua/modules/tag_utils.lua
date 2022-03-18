@@ -10,6 +10,8 @@ local alert_entities = require "alert_entities"
 local alert_consts = require "alert_consts"
 local alert_severities = require "alert_severities"
 local alert_utils = require "alert_utils"
+local host_pools = require "host_pools"
+local dscp_consts = require "dscp_consts"
 
 local tag_utils = {}
 
@@ -179,6 +181,11 @@ tag_utils.defined_tags = {
       value_type = 'id',
       i18n_label = i18n('db_search.tags.vlan_id'),
       operators = {'eq', 'neq', 'lt', 'gt', 'gte', 'lte'}
+   },
+   snmp_interface = {
+      value_type = 'snmp_interface',
+      i18n_label = i18n('db_search.tags.snmp_interface'),
+      operators = {'eq', 'neq'}
    },
    input_snmp = {
       value_type = 'snmp_interface',
@@ -399,7 +406,8 @@ tag_utils.formatters = {
 
 -- ######################################
 
-function tag_utils.get_tag_info(id)
+function tag_utils.get_tag_info(id, entity)
+
    local tag = tag_utils.defined_tags[id]
 
    if tag == nil then
@@ -423,30 +431,115 @@ function tag_utils.get_tag_info(id)
    end
 
    -- select (array of values)
-   if tag.value_type == "l7_proto" then
+   
+   if tag.value_type == "alert_type" and entity ~= nil then
+      filter.value_type = 'array'
+      filter.options = {}
+      local alert_types = alert_consts.getAlertTypesInfo(entity.entity_id)
+      for id, info in pairsByField(alert_types, 'label', asc) do
+         filter.options[#filter.options+1] = { value = id, label = info.label }
+      end
+
+   elseif tag.value_type == "dscp_type" then
+      filter.value_type = 'array'
+      filter.options = {}
+      local dscp_types = dscp_consts.dscp_class_list()
+      for id, info in pairsByField(dscp_types, 'label', asc) do
+         filter.options[#filter.options+1] = { value = id, label = info.label }
+      end
+
+   elseif tag.value_type == "flow_risk" then
+      filter.value_type = 'array'
+      filter.options = {}
+      local flow_risk_list = ntop.getRiskList() or {}
+      if table.len(flow_risk_list) > 0 then
+         flow_risk_list[1] = i18n("flow_risk.ndpi_no_risk")
+      end
+      for id, info in pairsByValues(flow_risk_list, asc) do
+         filter.options[#filter.options+1] = { value = id-1, label = info }
+      end
+
+   elseif tag.value_type == "host_pool_id" then
+      filter.value_type = 'array'
+      filter.options = {}
+      local host_pools_instance = host_pools:create()
+      local host_pools_stats = interface.getHostPoolsStats()
+      local host_pool_list = {}
+      for pool_id, _ in pairs(host_pools_stats) do
+         local label = host_pools_instance:get_pool_name(pool_id)
+         filter.options[#filter.options+1] = { value = pool_id, label = label }
+      end
+
+   elseif tag.value_type == "location" then
+      filter.value_type = 'array'
+      filter.options = {}
+      for  _, v in pairsByField(tag_utils.ip_location, 'label', asc) do
+         filter.options[#filter.options+1] = { value = v.id, label = v.label }
+      end
+
+   elseif tag.value_type == "l4_proto" then
+      filter.value_type = 'array'
+      filter.options = {}
+      local l4_protocols = l4_proto_list()
+      for name, id in pairsByKeys(l4_protocols, asc) do
+         filter.options[#filter.options+1] = { value = id, label = name }
+      end
+
+   elseif tag.value_type == "l7_proto" then
       filter.value_type = 'array'
       filter.options = {}
       local l7_protocols = interface.getnDPIProtocols()
       for name, id in pairsByKeys(l7_protocols, asc) do
-         filter.options[#filter.options+1] = { value = id, label = name, }
+         filter.options[#filter.options+1] = { value = id, label = name }
       end
+
+   elseif tag.value_type == "l7_category" then
+      filter.value_type = 'array'
+      filter.options = {}
+      local l7_protocols = interface.getnDPICategories()
+      for name, id in pairsByKeys(l7_protocols, asc) do
+         filter.options[#filter.options+1] = { value = id, label = name }
+      end
+
+   elseif tag.value_type == "network_id" then
+      filter.value_type = 'array'
+      filter.options = {}
+      local networks_stats = interface.getNetworksStats()
+      for n, ns in pairs(networks_stats) do
+         filter.options[#filter.options+1] = { value = ns.network_id, label = getFullLocalNetworkName(ns.network_key) }
+      end
+
+   elseif tag.value_type == "observation_point_id" then
+      filter.value_type = 'array'
+      filter.options = {}
+      local obs_points = interface.getObsPointsInfo()
+      local obs_points_list = {}
+      for _, stats in pairs(obs_points["ObsPoints"] or {}) do
+         obs_points_list[#obs_points_list + 1] = { alias = getFullObsPointName(stats["obs_point"]), id = stats["obs_point"] }
+      end
+      for  _, v in pairsByField(obs_points_list, 'alias', asc) do
+         filter.options[#filter.options+1] = { value = v.id, label = v.alias }
+      end
+
    elseif tag.value_type == "ip_version" then
       filter.value_type = 'array'
       filter.options = {}
-      filter.options[#filter.options+1] = { value = "4", label = i18n("ipv4"), }
-      filter.options[#filter.options+1] = { value = "6", label = i18n("ipv6"), }
+      filter.options[#filter.options+1] = { value = "4", label = i18n("ipv4") }
+      filter.options[#filter.options+1] = { value = "6", label = i18n("ipv6") }
+
    elseif tag.value_type == "role" then
       filter.value_type = 'array'
       filter.options = {}
-      filter.options[#filter.options+1] = { value = "attacker", label = i18n("attacker"), }
+      filter.options[#filter.options+1] = { value = "attacker", label = i18n("attacker") }
       filter.options[#filter.options+1] = { value = "victim",   label = i18n("victim"),   }
-      filter.options[#filter.options+1] = { value = "no_attacker_no_victim", label = i18n("no_attacker_no_victim"),
-      }
+      filter.options[#filter.options+1] = { value = "no_attacker_no_victim", label = i18n("no_attacker_no_victim") }
+
    elseif tag.value_type == "role_cli_srv" then
       filter.value_type = 'array'
       filter.options = {}
-      filter.options[#filter.options+1] = { value = "client", label = i18n("client"), }
-      filter.options[#filter.options+1] = { value = "server", label = i18n("server"), }
+      filter.options[#filter.options+1] = { value = "client", label = i18n("client") }
+      filter.options[#filter.options+1] = { value = "server", label = i18n("server") }
+
    elseif tag.value_type == "severity" then
       filter.value_type = 'array'
       filter.options = {}

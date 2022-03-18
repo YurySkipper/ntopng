@@ -154,6 +154,7 @@ end
 --@brief Get info about additional available filters
 function host_alert_store:_get_additional_available_filters()
    local filters = {
+      vlan_id = tag_utils.defined_tags.vlan_id,
       ip_version = tag_utils.defined_tags.ip_version,
       ip = tag_utils.defined_tags.ip,      
       name = tag_utils.defined_tags.name,
@@ -185,7 +186,7 @@ end
 
 --@brief Convert an alert coming from the DB (value) to an host_info table
 function host_alert_store:_alert2hostinfo(value)
-   return {ip = value["ip"], vlan = value["vlan_id"], name = value["name"]}
+   return {ip = value["ip"], name = value["name"]}
 end
 
 --@brief Convert an alert coming from the DB (value) to a record returned by the REST API
@@ -197,10 +198,14 @@ function host_alert_store:format_record(value, no_html)
    local alert_name = alert_consts.alertTypeLabel(tonumber(value["alert_id"]), no_html, alert_entities.host.entity_id)
    local alert_fullname = alert_consts.alertTypeLabel(tonumber(value["alert_id"]), true, alert_entities.host.entity_id)
    local msg = alert_utils.formatAlertMessage(ifid, value, alert_info)
-   local host = hostinfo2hostkey(value)
+
+   --local host = hostinfo2hostkey(value)
+   -- Handle VLAN as a separate field
+   local host = value["ip"]
+
    local reference_html = nil
 
-   reference_html = hostinfo2detailshref({ip = value["ip"], vlan = value["vlan_id"]}, nil, href_icon, "", true)
+   reference_html = hostinfo2detailshref({ip = value["ip"]}, nil, href_icon, "", true)
    if reference_html == href_icon then
       reference_html = nil
    end
@@ -214,7 +219,7 @@ function host_alert_store:format_record(value, no_html)
    }
 
    -- Long, unshortened label
-   local host_label_long = hostinfo2label(self:_alert2hostinfo(value), true --[[ Show VLAN --]], false)
+   local host_label_long = hostinfo2label(self:_alert2hostinfo(value), false --[[ Show VLAN --]], false)
 
    if no_html then
       record[RNAME.IP.name]["label"] = host_label_long
@@ -285,7 +290,11 @@ function host_alert_store:format_record(value, no_html)
       record[RNAME.IS_SERVER.name] = tostring(false)  -- when no_html is enabled a default value must be present
    end
 
-   record[RNAME.VLAN_ID.name] = value["vlan_id"] or 0
+   if value["vlan_id"] and tonumber(value["vlan_id"]) ~= 0 then
+      record[RNAME.VLAN_ID.name] = value["vlan_id"]
+   else
+      record[RNAME.VLAN_ID.name] = ""
+   end
 
    record[RNAME.ALERT_NAME.name] = alert_name
 

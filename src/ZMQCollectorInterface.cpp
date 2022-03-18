@@ -21,6 +21,8 @@
 
 #include "ntop_includes.h"
 
+// #define MSG_DEBUG
+
 #ifndef HAVE_NEDGE
 
 /* **************************************************** */
@@ -255,7 +257,7 @@ void ZMQCollectorInterface::checkPointCounters(bool drops_only) {
 
 void ZMQCollectorInterface::collect_flows() {
   struct zmq_msg_hdr_v0 h0;
-  struct zmq_msg_hdr *h = (struct zmq_msg_hdr *) &h0; /* NOTE: in network-byte-order format */
+  struct zmq_msg_hdr_v1 *h = (struct zmq_msg_hdr_v1 *) &h0; /* NOTE: in network-byte-order format */
   char *payload = NULL;
   const u_int payload_len = 131072;
   zmq_pollitem_t items[MAX_ZMQ_SUBSCRIBERS];
@@ -305,8 +307,8 @@ void ZMQCollectorInterface::collect_flows() {
     } while(rc == 0);
 
     for(int subscriber_id = 0; subscriber_id < num_subscribers; subscriber_id++) {
-      u_int32_t msg_id, last_msg_id;
-      u_int8_t source_id = 0;
+      u_int32_t msg_id = 0, last_msg_id;
+      u_int32_t source_id = 0;
       u_int32_t publisher_version = 0;
 	
       if(items[subscriber_id].revents & ZMQ_POLLIN) {
@@ -317,17 +319,18 @@ void ZMQCollectorInterface::collect_flows() {
 	  msg_id = 0, source_id = 0;
           publisher_version = h0.version;
 
-	} else /* size == struct zmq_msg_hdr */ {
+	} else {
           /* safety checks */
-          if(size != sizeof(struct zmq_msg_hdr) || (
-            h->version != ZMQ_MSG_VERSION && 
-            h->version != ZMQ_MSG_VERSION_TLV &&
-            h->version != ZMQ_COMPATIBILITY_MSG_VERSION
-          )) {
+          if(
+	     ((size != sizeof(struct zmq_msg_hdr_v1)) && (size != sizeof(struct zmq_msg_hdr_v2)))
+	     || ((h->version != ZMQ_MSG_VERSION)
+		 && (h->version != ZMQ_MSG_VERSION_TLV)
+		 && (h->version != ZMQ_COMPATIBILITY_MSG_VERSION))
+	     ) {
 	    ntop->getTrace()->traceEvent(TRACE_WARNING,
 				         "Unsupported publisher version: is your nProbe sender "
 					 "outdated? [%u][%u][%u][%u][%u]",
-				         size, sizeof(struct zmq_msg_hdr), h->version,
+				         size, sizeof(struct zmq_msg_hdr_v1), h->version,
 					 ZMQ_MSG_VERSION, ZMQ_COMPATIBILITY_MSG_VERSION);
 	    continue; /* skip message */
           }
@@ -339,42 +342,58 @@ void ZMQCollectorInterface::collect_flows() {
 	  if(h->version == ZMQ_COMPATIBILITY_MSG_VERSION) {
 	    source_id = 0, msg_id = h->msg_id; // host byte order
             publisher_version = h->version;
-	  } else {
+	  } else if(size == sizeof(struct zmq_msg_hdr_v1)) {
 	    source_id = h->source_id, msg_id = ntohl(h->msg_id);
             publisher_version = h->version;
+	  } else if(size == sizeof(struct zmq_msg_hdr_v2)) {
+	    struct zmq_msg_hdr_v2 *h2 = (struct zmq_msg_hdr_v2 *) &h0;
+	    
+	    source_id = h2->source_id, msg_id = ntohl(h2->msg_id);
+            publisher_version = h2->version;
           }
         }
 
+	/*
+	  ntop->getTrace()->traceEvent(TRACE_NORMAL, "[size: %u][source_id: %u]", size, source_id);
+	*/
+	
 	if(source_id_last_msg_id.find(source_id) == source_id_last_msg_id.end())
-	  source_id_last_msg_id[source_id] = 0;
-
-	last_msg_id = source_id_last_msg_id[source_id];
+	  last_msg_id = msg_id;
+	else
+	  last_msg_id = source_id_last_msg_id[source_id];
 	
 #ifdef ZMQ_DEBUG
 	ntop->getTrace()->traceEvent(TRACE_NORMAL, "[topic: %s]", h->url);
+#endif
+
+#ifdef MSG_DEBUG
 	ntop->getTrace()->traceEvent(TRACE_NORMAL, "[subscriber_id: %u][message source: %u]"
 				     "[msg_id: %u][last_msg_id: %u][lost: %i]",
 				     subscriber_id, source_id, msg_id, last_msg_id, msg_id - last_msg_id - 1);
 #endif
 	
-	if(msg_id > 0) {
-	  if(msg_id < last_msg_id) ; /* Start over */
-	  else if(last_msg_id > 0) {
-	    int32_t diff = msg_id - last_msg_id;
-
-	    if(diff > 1) {
-	      recvStats.zmq_msg_drops += diff - 1;
-
-#ifdef ZMQ_DEBUG
-	      ntop->getTrace()->traceEvent(TRACE_NORMAL, "[msg_id=%u][last=%u][tot_msgs=%u][drops=%u][+%u]", 
-					   msg_id, last_msg_id, recvStats.zmq_msg_rcvd, recvStats.zmq_msg_drops, diff-1);
+	if(msg_id < last_msg_id) {
+#ifdef MSG_DEBUG
+	  ntop->getTrace()->traceEvent(TRACE_NORMAL, "ROLLBACK [subscriber_id: %u][msg_id=%u][last=%u][tot_msgs=%u][drops=%u]", 
+				       subscriber_id, msg_id, last_msg_id, recvStats.zmq_msg_rcvd, recvStats.zmq_msg_drops);
 #endif
-	    }
+
+	  ; /* Start over */
+	} else if(last_msg_id > 0) {
+	  int32_t diff = msg_id - last_msg_id;
+	  
+	  if(diff > 1) {
+	    recvStats.zmq_msg_drops += diff - 1;
+	      
+#ifdef MSG_DEBUG
+	    ntop->getTrace()->traceEvent(TRACE_NORMAL, "DROP [subscriber_id: %u][msg_id=%u][last=%u][tot_msgs=%u][drops=%u][+%u]", 
+					 subscriber_id, msg_id, last_msg_id, recvStats.zmq_msg_rcvd, recvStats.zmq_msg_drops, diff-1);
+#endif
 	  }
-
-	  source_id_last_msg_id[source_id] = msg_id;
-	}       
-
+	}
+	
+	source_id_last_msg_id[source_id] = msg_id;	       
+	
 	/*
           The zmq_recv() function shall return number of bytes in the message if successful.
           Note that the value can exceed the value of the len parameter in case the message was truncated.

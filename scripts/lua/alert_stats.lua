@@ -67,6 +67,10 @@ if not status then
    -- Default to historical
    status = "historical"
 
+   -- Always show the historical page to avoid flapping when reloading the alerts page
+   -- which is confusing for the user. This also prevents syncronization issues between
+   -- lua and js (as they do not currently share the 'status').
+   --[[
    if page ~= "all" then
      -- If there alert alerts engaged for the selected entity, go to the engaged tab
      if alert_entities[page] and num_alerts_engaged_by_entity[tostring(alert_entities[page].entity_id)] then
@@ -81,6 +85,7 @@ if not status then
        end
      end
    end
+   --]]
 end
 
 -- Check the earliest alert available
@@ -96,7 +101,7 @@ local earliest_available_epoch = alert_store_instance:get_earliest_available_epo
 local time = os.time()
 
 -- initial epoch_begin is set as now - 30 minutes for historical, or as 1 week for engaged
-local epoch_begin = _GET["epoch_begin"] or time - (status ~= "engaged" and 1800 or 60 * 60 * 24 * 7)
+local epoch_begin = _GET["epoch_begin"] or time - (1800) -- 30 minutes
 local epoch_end = _GET["epoch_end"] or time
 local time_range_query = "epoch_begin="..epoch_begin.."&epoch_end="..epoch_end
 
@@ -119,6 +124,7 @@ local network_name = _GET["network_name"]
 local role = _GET["role"]
 local role_cli_srv = _GET["role_cli_srv"]
 local subtype = _GET["subtype"]
+local vlan_id = _GET["vlan_id"]
 
 --------------------------------------------------------------
 
@@ -299,11 +305,12 @@ dofile(dirs.installdir .. "/scripts/lua/inc/menu.lua")
 
 local url = ntop.getHttpPrefix() .. "/lua/alert_stats.lua?"
 
-page_utils.print_navbar(i18n("alerts_dashboard.alerts"), url, pages)
+-- page_utils.print_navbar(i18n("alerts_dashboard.alerts"), url, pages)
 
 widget_gui_utils.register_timeseries_area_chart(CHART_NAME, 0, {
    Datasource(endpoint_ts, {
        ifid = ifid,
+       vlan_id = vlan_id,
        epoch_begin = epoch_begin,
        epoch_end = epoch_end,
        status = status,
@@ -578,7 +585,7 @@ template_utils.render("pages/modals/alerts/filters/add.template", filters_contex
 
 --------------------------------------------------------------
 
-local endpoint_cards = ntop.getHttpPrefix() .. "/lua/pro/rest/v2/get/" .. page .. "/alert/general_stats.lua"
+local endpoint_cards = ntop.getHttpPrefix() .. "/lua/pro/rest/v2/get/" .. page .. "/alert/top.lua"
 
 local datasource_data = {
    ifid = ifid,
@@ -631,7 +638,7 @@ local datatable = {
        disable = (page ~= "host" and page ~= "flow")
    },
 }
-
+   
 local context = {
    ifid = ifid,
    ui_utils = ui_utils,
@@ -716,6 +723,7 @@ local context = {
        name = CHART_NAME
    },
    datatable = datatable,
+   navbar = json.encode(page_utils.get_navbar_context(i18n("alerts_dashboard.alerts"), url, pages)),
    extra_js = "pages/alerts/datatable.js.template",
    extra_js_context = {
        ifid = ifid,

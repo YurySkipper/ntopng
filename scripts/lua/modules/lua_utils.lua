@@ -26,6 +26,8 @@ locales_utils = require "locales_utils"
 local os_utils = require "os_utils"
 local format_utils = require "format_utils"
 local dscp_consts = require "dscp_consts"
+local http_utils = require "http_utils"
+local dns_utils = require "dns_utils"
 
 -- TODO: replace those globals with locals everywhere
 
@@ -4776,25 +4778,25 @@ function addHTTPInfoToAlertDescr(msg, alert_json)
       and (table.len(alert_json["proto"]["http"]) > 0)) then
       
       if alert_json["proto"]["http"]["last_method"] then
-         msg = msg .. string.format(" [%s: %s]", 
-            i18n("last_method"), 
+         msg = msg .. string.format(" [ %s: %s ]", 
+            i18n("db_explorer.http_method"), 
             alert_json["proto"]["http"]["last_method"])
       end
 
       if alert_json["proto"]["http"]["last_return_code"] then
-         msg = msg .. string.format(" [%s: %s]", 
-            i18n("last_return_code"),
-            alert_json["proto"]["http"]["last_return_code"])
+         msg = msg .. string.format(" [ %s: %s ]", 
+            i18n("last_response_status_code"),
+            http_utils.getResponseStatusCode(alert_json["proto"]["http"]["last_return_code"]))
       end
 
       if alert_json["proto"]["http"]["last_user_agent"] then
-         msg = msg .. string.format(" [%s: %s]", 
+         msg = msg .. string.format(" [ %s: %s ]", 
             i18n("last_user_agent"),  
             alert_json["proto"]["http"]["last_user_agent"])
       end
 
       if alert_json["proto"]["http"]["last_url"] then
-         msg = msg .. string.format(" [%s: %s]", 
+         msg = msg .. string.format(" [ %s: %s ]", 
             i18n("last_url"),
             i18n("external_link_url", { url = alert_json["proto"]["http"]["last_url"], 
                                         url_name = alert_json["proto"]["http"]["last_url"]}))
@@ -4812,19 +4814,19 @@ function addDNSInfoToAlertDescr(msg, alert_json)
       and (table.len(alert_json["proto"]["dns"] or {}) > 0)) then
       
       if alert_json["proto"]["dns"]["last_query_type"] then
-         msg = msg .. string.format(" [%s: %s]", 
+         msg = msg .. string.format(" [ %s: %s ]", 
             i18n("last_query_type"), 
-            alert_json["proto"]["dns"]["last_query_type"])
+            dns_utils.getQueryType(alert_json["proto"]["dns"]["last_query_type"]))
       end
 
       if alert_json["proto"]["dns"]["last_return_code"] then
-         msg = msg .. string.format(" [%s: %s]", 
+         msg = msg .. string.format(" [ %s: %s ]", 
             i18n("last_return_code"),
-            alert_json["proto"]["dns"]["last_return_code"])
+            dns_utils.getResponseStatusCode(alert_json["proto"]["dns"]["last_return_code"]))
       end
 
       if alert_json["proto"]["dns"]["last_query"] then
-         msg = msg .. string.format(" [%s: %s]", 
+         msg = msg .. string.format(" [ %s: %s ]", 
             i18n("last_url"),
             i18n("external_link_url", { url = alert_json["proto"]["dns"]["last_query"], 
                                         url_name = alert_json["proto"]["dns"]["last_query"]}))
@@ -4841,14 +4843,14 @@ function addTLSInfoToAlertDescr(msg, alert_json)
       and (table.len(alert_json["proto"] or {}) > 0) 
       and (table.len(alert_json["proto"]["tls"] or {}) > 0)) then
       if alert_json["proto"]["tls"]["notBefore"] and alert_json["proto"]["tls"]["notAfter"] then
-         msg = msg .. string.format(" [%s: %s - %s]", 
+         msg = msg .. string.format(" [ %s: %s - %s ]", 
             i18n("flow_details.tls_certificate_validity"), 
             formatEpoch(alert_json["proto"]["tls"]["notBefore"]),
             formatEpoch(alert_json["proto"]["tls"]["notAfter"]))
       end
 
       if alert_json["proto"]["tls"]["version"] then
-         msg = msg .. string.format(" [%s: %s]", 
+         msg = msg .. string.format(" [ %s: %s ]", 
             i18n("flow_details.tls_version"), 
             alert_json["proto"]["tls"]["version"])
       end
@@ -4860,28 +4862,29 @@ end
 -- ##############################################
 
 function addBytesInfoToAlertDescr(msg, value)
-   local predominant_bytes = i18n("traffic_srv_to_cli")
-   if (value["cli2srv_bytes"] or 0) > (value["srv2cli_bytes"] or 0) then
-      predominant_bytes = i18n("traffic_cli_to_srv")
-   end
+  local predominant_bytes = i18n("traffic_srv_to_cli")
 
-   msg = msg .. string.format(" [%s: %s]", 
-      i18n("predominant_direction"),
-      predominant_bytes)
+  if (tonumber(value["cli2srv_bytes"] or 0)) > (tonumber(value["srv2cli_bytes"] or 0)) then
+    predominant_bytes = i18n("traffic_cli_to_srv")
+  end
+
+  msg = string.format("%s [ %s: %s | %s: %s | %s: %s ]", msg, i18n("predominant_direction"), predominant_bytes, 
+                      i18n("server_traffic"), bytesToSize(value["srv2cli_bytes"] or 0),
+                      i18n("client_traffic"), bytesToSize(value["cli2srv_bytes"] or 0))
    
-   return msg
+  return msg
 end
 
 -- ##############################################
 
-function addExtraFlowInfo(msg, alert_json, value)
-   msg = addScoreToAlertDescr(msg, ntop.getFlowAlertScore((tonumber(value["alert_id"]))))
-   msg = addHTTPInfoToAlertDescr(msg, alert_json)   
-   msg = addDNSInfoToAlertDescr(msg, alert_json)
-   msg = addTLSInfoToAlertDescr(msg, alert_json)
-   msg = addBytesInfoToAlertDescr(msg, value)
+function addExtraFlowInfo(alert_json, value)
+  local msg = ""
+  msg = addHTTPInfoToAlertDescr(msg, alert_json)   
+  msg = addDNSInfoToAlertDescr(msg, alert_json)
+  msg = addTLSInfoToAlertDescr(msg, alert_json)
+  msg = addBytesInfoToAlertDescr(msg, value)
 
-   return msg
+  return msg
 end
 
 -- ##############################################
@@ -5019,6 +5022,32 @@ function add_delete_obs_point_button()
    end
 
    return button
+end   
+
+function format_portidx_name(cached_dev, portidx, short_version)     
+  local idx_name = portidx                                                                                                                                                                                        
+    
+  if (cached_dev) and (cached_dev["interfaces"]) then                                                                                                                                                                    
+    local port_info = cached_dev["interfaces"][tostring(portidx)]                                                                                                                                                   
+                                                                                                                                                                                                                    
+    if port_info then                                                                                                                                                                                             
+      package.path = dirs.installdir .. "/pro/scripts/lua/modules/?.lua;" .. package.path                                                                                                                          
+      snmp_location = require "snmp_location"                                                                                                                                                                      
+                                                                                                                                                                                                                   
+      if not port_info["id"] then                                                                                                                                                                                   
+        port_info["id"] = port_info["index"]                                                                                                                                                                          
+        port_info["snmp_device_ip"] = cached_dev["host_ip"]                                                                                                                                                           
+      end   
+                         
+      if short_version then
+        idx_name = string.format('%s [%s]', port_info["index"], port_info["name"]) 
+      else
+        idx_name = string.format('%s', i18n("snmp.interface_device", {interface=snmp_location.snmp_port_link(port_info), device=snmp_location.snmp_device_link(cached_dev["host_ip"])}))                                                                                                                                                                
+      end               
+    end
+  end                                                                                                                                                                                              
+                                                                                                                                                                                                                  
+  return idx_name                                                                                                                                                                                                 
 end   
 
 function print_copy_button(id, data)

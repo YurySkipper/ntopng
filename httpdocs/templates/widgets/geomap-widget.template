@@ -62,15 +62,12 @@ let addRefToHost = true;
 let endpoint = http_prefix + "/lua/rest/v2/get/geo_map/hosts.lua?";
 let baseEndpoint = "";
 
-// initialize alert api
-//$('#geomap-alert').alert();
-
 const create_marker = (h) => {    
     h = JSON.parse(JSON.stringify(h));
     const settings = { title: h.name };
     if (h.isRoot) settings.icon = red_marker;
 
-    const ip = h.ip
+    let ip = h.ip
     const lat = h.lat;
     const lng = h.lng;
     const name = h.name;
@@ -103,8 +100,20 @@ const create_marker = (h) => {
     if(name)
         name_ip = name + "</br>" + name_ip;
 
+    analysisPage = new URLSearchParams(window.location.search)
+    let alreadyFilteredIp = analysisPage.get('ip')
+
+    if(alreadyFilteredIp) ip = alreadyFilteredIp + "," + ip
+
+    analysisPage.set('ip', ip + ";eq")
+
+    let hostDetails = ""
+
+    h.host_in_memory ? hostDetails = `<a href='${http_prefix}/lua/host_details.lua?host=${ip}'> <i class="fas fa-laptop"></i></a>` : ``
+
     const marker = `<div class='infowin'>
-                        <a href='${http_prefix}/lua/host_details.lua?host=${ip}'>${name_ip}</a>
+                        <a href='${http_prefix}/lua/pro/db_search.lua?${analysisPage.toString()}'>${name_ip}</a>
+                        ${hostDetails}
                         <hr>
                         ${extra_info}
                     </div>`

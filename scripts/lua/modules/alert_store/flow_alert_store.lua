@@ -34,6 +34,16 @@ end
 
 -- ##############################################
 
+function alert_store:_get_tstamp_column_name()
+   if ntop.isClickHouseEnabled() then
+      return "first_seen"
+   else
+      return "tstamp"
+   end
+end
+
+-- ##############################################
+
 function flow_alert_store:insert(alert)
    local hex_prefix = ""
    local extra_columns = ""
@@ -258,6 +268,7 @@ local RNAME = {
    ADDITIONAL_ALERTS = { name = "additional_alerts", export = true},
    ALERT_NAME = { name = "alert_name", export = true},
    DESCRIPTION = { name = "description", export = true},
+   FLOW_RELATED_INFO = { name = "flow_related_info", export = true },
    MSG = { name = "msg", export = true, elements = {"name", "value", "description"}},
    FLOW = { name = "flow", export = true, elements = {"srv_ip.label", "srv_ip.value", "srv_port", "cli_ip.label", "cli_ip.value", "cli_port"}},
    VLAN_ID = { name = "vlan_id", export = true},
@@ -305,8 +316,10 @@ function flow_alert_store:format_record(value, no_html)
    -- Add link to active flow
    local alert_json = json.decode(value.json)
    
-   msg = addExtraFlowInfo(msg, alert_json, value)
+   local flow_related_info = addExtraFlowInfo(alert_json, value)
 
+    msg = addScoreToAlertDescr(msg, ntop.getFlowAlertScore(tonumber(value["alert_id"])))
+    
    if not no_html and alert_json then
       local active_flow = interface.findFlowByKeyAndHashId(alert_json["ntopng.key"], alert_json["hash_entry_id"])
       if active_flow and active_flow["seen.first"] < tonumber(value["tstamp_end"]) then
@@ -344,10 +357,10 @@ function flow_alert_store:format_record(value, no_html)
 		  if alert_risk > 0 then
 		     message = string.format("%s %s", message, flow_risk_utils.get_documentation_link(alert_risk))
 		  end
-        
-                  if alert_score > 0 then	
-                   message = addExtraFlowInfo(message, alert_json, value)
-                  end
+
+      if alert_score > 0 then
+        message = addScoreToAlertDescr(message, alert_score)
+      end
 
 		  if not other_alerts_by_score[alert_score] then
 		     other_alerts_by_score[alert_score] = {}
@@ -380,9 +393,6 @@ function flow_alert_store:format_record(value, no_html)
       end
    end
 
-   -- Host reference
-   --local cli_ip = hostinfo2hostkey(value, "cli")
-   --local srv_ip = hostinfo2hostkey(value, "srv")
    -- Handle VLAN as a separate field
    local cli_ip = value["cli_ip"]
    local srv_ip = value["srv_ip"]
@@ -395,12 +405,17 @@ function flow_alert_store:format_record(value, no_html)
 
    if no_html then
       msg = noHtml(msg)
+      flow_related_info  = noHtml(flow_related_info)
    else
       record[RNAME.DESCRIPTION.name] = {
          descr = msg,
          shorten_descr = shorten_msg,
       }
    end
+
+   record[RNAME.FLOW_RELATED_INFO.name] = {
+    descr = flow_related_info
+  }
 
    record[RNAME.ALERT_NAME.name] = alert_name
 
@@ -420,7 +435,7 @@ function flow_alert_store:format_record(value, no_html)
  
    local reference_html = "" 
    if not no_html then
-      reference_html = hostinfo2detailshref({ip = value["cli_ip"]}, nil, href_icon, "", true)
+      reference_html = hostinfo2detailshref({ip = value["cli_ip"]}, nil, href_icon, "", true, nil, false)
       if reference_html == href_icon then
 	 reference_html = ""
       end
@@ -451,8 +466,8 @@ function flow_alert_store:format_record(value, no_html)
       end
 
       -- Shortened label if necessary for UI purposes
-      flow_cli_ip["label"] = hostinfo2label(self:_alert2hostinfo(value, true --[[ As client --]]), true --[[ Show VLAN --]], true --[[ Shorten --]])
-      flow_cli_ip["label_long"] = hostinfo2label(self:_alert2hostinfo(value, true --[[ As client --]]), true --[[ Show VLAN --]], false)
+      flow_cli_ip["label"] = hostinfo2label(self:_alert2hostinfo(value, true --[[ As client --]]), false --[[ Show VLAN --]], true --[[ Shorten --]])
+      flow_cli_ip["label_long"] = hostinfo2label(self:_alert2hostinfo(value, true --[[ As client --]]), false --[[ Show VLAN --]], false)
    end
 
    -- Format Server
@@ -490,8 +505,8 @@ function flow_alert_store:format_record(value, no_html)
       end
       
       -- Shortened label if necessary for UI purposes
-      flow_srv_ip["label"] = hostinfo2label(self:_alert2hostinfo(value, false --[[ As server --]]), true --[[ Show VLAN --]], true --[[ Shorten --]])
-      flow_srv_ip["label_long"] = hostinfo2label(self:_alert2hostinfo(value, false --[[ As server --]]), true --[[ Show VLAN --]], false)
+      flow_srv_ip["label"] = hostinfo2label(self:_alert2hostinfo(value, false --[[ As server --]]), false --[[ Show VLAN --]], true --[[ Shorten --]])
+      flow_srv_ip["label_long"] = hostinfo2label(self:_alert2hostinfo(value, false --[[ As server --]]), false --[[ Show VLAN --]], false)
    end
 
    local flow_cli_port = value["cli_port"]
@@ -689,6 +704,11 @@ function flow_alert_store:get_alert_details(value)
    details[#details + 1] = {
       label = i18n("flow_details.additional_alert_type"),
       content = fmt['additional_alerts']['descr'],
+   }
+
+   details[#details + 1] = {
+      label = i18n("alerts_dashboard.flow_related_info"),
+      content = fmt['flow_related_info']['descr'],
    }
 
    proto_info = editProtoDetails(proto_info)

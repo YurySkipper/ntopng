@@ -49,7 +49,7 @@ const REGEXES = {
 	https: "^https?://.+$",
 	token: "^[0-9a-f]{32}",
     score: "^[0-9]{1,5}",
-    telegram_channel: "^[0-9]{1,15}"
+    telegram_channel: "^[0-9\-]{1,15}"
 };
 
 export default class NtopUtils {
@@ -678,22 +678,33 @@ export default class NtopUtils {
 	/* Used while searching hosts a and macs with typeahead */
 	static makeFindHostBeforeSubmitCallback(http_prefix) {
 		return function (form, data) {
-			if (data.type == "mac") {
-				form.attr("action", http_prefix + "/lua/mac_details.lua");
-			} else if (data.type == "network") {
-				form.attr("action", http_prefix + "/lua/hosts_stats.lua");
-				NtopUtils._add_find_host_link(form, "network", data.network);
-			} else if (data.type == "snmp") {
-				form.attr("action", http_prefix + "/lua/pro/enterprise/snmp_interface_details.lua");
-				NtopUtils._add_find_host_link(form, "snmp_port_idx", data.snmp_port_idx);
-			} else if (data.type == "snmp_device") {
-				form.attr("action", http_prefix + "/lua/pro/enterprise/snmp_device_details.lua");
-			} else if (data.type == "asn") {
-				form.attr("action", http_prefix + "/lua/hosts_stats.lua");
-				NtopUtils._add_find_host_link(form, "asn", data.asn);
+			if (data.context && data.context == "historical") {
+				form.attr("action", http_prefix + "/lua/pro/db_search.lua");
+				if (data.type == "ip") {
+					NtopUtils._add_find_host_link(form, "ip", data.ip);
+				} else if (data.type == "mac") {
+					NtopUtils._add_find_host_link(form, "mac", data.mac);
+				} else /* "hostname" */ {
+					NtopUtils._add_find_host_link(form, "name", data.hostname ? data.hostname : data.name);
+				}
 			} else {
-				form.attr("action", http_prefix + "/lua/host_details.lua");
-				NtopUtils._add_find_host_link(form, "mode", "restore");
+				if (data.type == "mac") {
+					form.attr("action", http_prefix + "/lua/mac_details.lua");
+				} else if (data.type == "network") {
+					form.attr("action", http_prefix + "/lua/hosts_stats.lua");
+					NtopUtils._add_find_host_link(form, "network", data.network);
+				} else if (data.type == "snmp") {
+					form.attr("action", http_prefix + "/lua/pro/enterprise/snmp_interface_details.lua");
+					NtopUtils._add_find_host_link(form, "snmp_port_idx", data.snmp_port_idx);
+				} else if (data.type == "snmp_device") {
+					form.attr("action", http_prefix + "/lua/pro/enterprise/snmp_device_details.lua");
+				} else if (data.type == "asn") {
+					form.attr("action", http_prefix + "/lua/hosts_stats.lua");
+					NtopUtils._add_find_host_link(form, "asn", data.asn);
+				} else {
+					form.attr("action", http_prefix + "/lua/host_details.lua");
+					NtopUtils._add_find_host_link(form, "mode", "restore");
+				}
 			}
 
 			return true;
@@ -1053,38 +1064,19 @@ export default class NtopUtils {
 
 	}
 
-	static copyToClipboard(text, success, failure, item) {
-		if (navigator.clipboard && window.isSecureContext) {
-			navigator.clipboard.writeText(text).then(function() {
-				if (item) {
-					item.attr("title", "Copied!")
-			        	    .tooltip("dispose")
-        				    .tooltip()
-        				    .tooltip("show");
-				}
-			}, function(err) {
-				//alert(failure + ': ' + err);
-			});
-		} else {
-			let textArea = document.createElement("textarea");
-			textArea.value = text;
-			textArea.style.position = "fixed";
- 			textArea.style.left = "-999999px";
- 			textArea.style.top = "-999999px";
-			document.body.appendChild(textArea);
-			textArea.focus();
-			textArea.select();
-			return new Promise((res, rej) => {
-				document.execCommand('copy') ? res() : rej();
-				textArea.remove();
-				if (item) {
-					item.attr("title", "Copied!")
-			        	    .tooltip("dispose")
-        				    .tooltip()
-        				    .tooltip("show");
-				}
-			});
-		}
+	static copyToClipboard(text, item) {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.setAttribute('readonly', '');
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    $(item).attr("title", "Copied!").tooltip("dispose").tooltip().tooltip("show");
+    $(item).removeAttr("data-bs-original-title")
+    $(item).attr("title", text)
 	}
 
 	static stripTags(html) {

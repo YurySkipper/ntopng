@@ -149,6 +149,13 @@ end
 
 -- ##############################################
 
+--@brief Return the indexed tstamp column
+function alert_store:_get_tstamp_column_name()
+   return "tstamp"
+end
+
+-- ##############################################
+
 --@brief Add filters on time
 --@param epoch_begin The start timestamp
 --@param epoch_end The end timestamp
@@ -161,8 +168,12 @@ function alert_store:add_time_filter(epoch_begin, epoch_end)
       self._epoch_begin = tonumber(epoch_begin)
       self._epoch_end = tonumber(epoch_end)
 
-      self:add_filter_condition_raw('tstamp',
-        string.format("tstamp >= %u AND tstamp <= %u", self._epoch_begin, self._epoch_end))
+      local tstamp_column = self:_get_tstamp_column_name()
+
+      self:add_filter_condition_raw(tstamp_column,
+        string.format("%s >= %u AND %s <= %u", 
+          tstamp_column, self._epoch_begin,
+          tstamp_column, self._epoch_end))
    end
 
    return true
@@ -1176,7 +1187,7 @@ end
 
 -- ##############################################
 
---@brief Format top alerts returned by get_stats() for general_stats.lua
+--@brief Format top alerts returned by get_stats() for top.lua
 function alert_store:format_top_alerts(stats)
    local top_alerts = {}
 
@@ -1348,6 +1359,7 @@ function alert_store:add_request_filters()
    local alert_severity = _GET["severity"] or _GET["alert_severity"]
    local score = _GET["score"]
    local rowid = _GET["row_id"]
+   local tstamp = _GET["tstamp"]
    local status = _GET["status"]
 
    -- Remember the score filter (see also alert_stats.lua)
@@ -1368,12 +1380,12 @@ function alert_store:add_request_filters()
    self:add_filter_condition_list('alert_id', alert_id, 'number')
    self:add_filter_condition_list('severity', alert_severity, 'number')
    self:add_filter_condition_list('score', score, 'number')
-
+   self:add_filter_condition_list('tstamp', tstamp, 'number')
    
    if(ntop.isClickHouseEnabled()) then
       -- Clickhouse db has the column 'interface_id', filter by that per interface
-      self:add_filter_condition_list('rowid', rowid, 'string')
       self:add_filter_condition_list('interface_id', ifid, 'number')
+      self:add_filter_condition_list('rowid', rowid, 'string')
    else
       self:add_filter_condition_list('rowid', rowid, 'number')
    end

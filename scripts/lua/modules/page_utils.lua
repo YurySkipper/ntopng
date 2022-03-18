@@ -305,16 +305,16 @@ function page_utils.print_header(title, addLoginJS)
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <link href="]] print(http_prefix) print[[/dist/third-party.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/dist/ntopng.css" rel="stylesheet">
-    <link href="]] print(http_prefix) print[[/dist/white-mode.css" rel="stylesheet">]]
+    <link href="]] print(http_prefix) print[[/dist/third-party.css?]] print(static_file_epoch) print[[" rel="stylesheet">
+    <link href="]] print(http_prefix) print[[/dist/ntopng.css?]] print(static_file_epoch) print[[" rel="stylesheet">
+    <link href="]] print(http_prefix) print[[/dist/white-mode.css?]] print(static_file_epoch) print[[" rel="stylesheet">]]
     
     if (dark_mode) then
       print[[<link href="]] print(http_prefix) print[[/dist/dark-mode.css?]] print(static_file_epoch) print[[" rel="stylesheet">]]
     end
 
    if (ntop.isPro() or ntop.isnEdge()) and ntop.exists(dirs.installdir .. "/httpdocs/img/custom_favicon.ico") then
-      favicon_path = ntop.getHttpPrefix().."/img/custom_favicon.ico"
+      favicon_path = http_prefix.."/img/custom_favicon.ico"
    end
    if (favicon_path ~= nil) then
     print[[<link href="]] print(favicon_path) print[[" rel="icon">]]
@@ -335,14 +335,14 @@ function page_utils.print_header(title, addLoginJS)
     ]]
           
     if addLoginJS then
-      print[[<script type="text/javascript" src="]] print(http_prefix) print[[/dist/login.js"></script>]]
+      print[[<script type="text/javascript" src="]] print(http_prefix) print[[/dist/login.js?]] print(static_file_epoch) print[["></script>]]
     end
 
     print[[
     <link href="]] print(http_prefix) print[[/dist/custom-theme.css?]] print(static_file_epoch) print[[" rel="stylesheet">
-    <script type="text/javascript" src="]] print (ntop.getHttpPrefix()) print("/lua/locale.lua?user_language="..language.."&epoch="..locale_when); print[["> </script>
-    <script type="text/javascript" src="]] print(http_prefix) print[[/dist/third-party.js"></script>
-    <script type="text/javascript" src="]] print(http_prefix) print[[/dist/ntopng.js"></script>
+    <script type="text/javascript" src="]] print(http_prefix) print("/lua/locale.lua?"..locale_when .. "&user_language=" ..language); print[["> </script>
+    <script type="text/javascript" src="]] print(http_prefix) print[[/dist/third-party.js?]] print(static_file_epoch) print[["></script>
+    <script type="text/javascript" src="]] print(http_prefix) print[[/dist/ntopng.js?]] print(static_file_epoch) print[["></script>
    
     </head>]]
   print([[
@@ -364,6 +364,7 @@ function page_utils.print_header_minimal(title, addLoginJS)
   local language = ternary(isEmptyString(admin_lang), "en", admin_lang)
   local locale_path = dirs.installdir.."/scripts/locales/"..language..".lua"
   local locale_when = ntop.fileLastChange(locale_path)
+  local static_file_epoch = ntop.getStaticFileEpoch()..""
   
   print [[
     <!DOCTYPE html>
@@ -373,12 +374,12 @@ function page_utils.print_header_minimal(title, addLoginJS)
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-        <link href="]] print(http_prefix) print[[/dist/third-party.css" rel="stylesheet">
-        <link href="]] print(http_prefix) print[[/dist/ntopng.css" rel="stylesheet">
+        <link href="]] print(http_prefix) print[[/dist/third-party.css?]] print(static_file_epoch) print[[" rel="stylesheet">
+        <link href="]] print(http_prefix) print[[/dist/ntopng.css?]] print(static_file_epoch) print[[" rel="stylesheet">
           ]]
 
          if (ntop.isPro() or ntop.isnEdge()) and ntop.exists(dirs.installdir .. "/httpdocs/img/custom_favicon.ico") then
-            favicon_path = ntop.getHttpPrefix().."/img/custom_favicon.ico"
+            favicon_path = http_prefix.."/img/custom_favicon.ico"
          end
          if (favicon_path ~= nil) then
           print[[<link href="]] print(favicon_path) print[[" rel="icon">]]
@@ -394,9 +395,9 @@ function page_utils.print_header_minimal(title, addLoginJS)
             margin-top: -5px;
             background:url(]] print(http_prefix) print[[/dist/images/flags.png) no-repeat
           }
-          <script type="text/javascript" src="]] print (ntop.getHttpPrefix()) print("/lua/locale.lua?user_language="..language.."&epoch="..locale_when); print[["> </script>
-          <script type="text/javascript" src="]] print(http_prefix) print[[/dist/third-party.js"></script>
-          <script type="text/javascript" src="]] print(http_prefix) print[[/dist/ntopng.js"></script>
+          <script type="text/javascript" src="]] print(http_prefix) print("/lua/locale.lua?"..locale_when .. "&user_language=" ..language); print[["> </script>
+          <script type="text/javascript" src="]] print(http_prefix) print[[/dist/third-party.js?]] print(static_file_epoch) print[["></script>
+          <script type="text/javascript" src="]] print(http_prefix) print[[/dist/ntopng.js?]] print(static_file_epoch) print[["></script>
           
       </head>
       <body>
@@ -404,6 +405,23 @@ function page_utils.print_header_minimal(title, addLoginJS)
 ]]
 end
 
+-- #################################
+
+function page_utils.get_navbar_context(title, base_url, items_table, label_url, back_url)
+   local help_link = page_utils.menu_entries[active_entry].help_link or nil
+   local icon = page_utils.menu_sections[active_section].icon or ""
+
+   local navbar = {
+   	 main_icon   = icon,
+         main_title  = title,
+         base_url    = base_url,
+         items_table = items_table,
+         label_url   = label_url,
+         back_url    = back_url,
+         help_link   = help_link
+   }
+   return navbar
+end
 -- #################################
 
 function page_utils.print_navbar(title, base_url, items_table, label_url, back_url)

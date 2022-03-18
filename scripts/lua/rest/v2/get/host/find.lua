@@ -61,6 +61,19 @@ else
 
 end
 
+-- Empty query
+if(isEmptyString(query)) then
+   local data = {
+      interface = ifname,
+      results = {},
+   }
+   
+   -- tprint(results)
+   
+   rest_utils.answer(rc, data)
+   return
+end
+
 local ifid = interface.getId()
 
 --- Links
@@ -500,14 +513,16 @@ end
 
 res_count = 0
 
-local function build_result(label, value, value_type, links, badges)
+local function build_result(label, value, value_type, links, badges, context)
    local r = {
       name = label,
-      ip = value,
       type = value_type,
       links = links,
       badges = badges,
+      context = context,
    }
+
+   r[value_type] = value
 
    return r
 end
@@ -538,6 +553,28 @@ for k, v in pairsByField(hosts, 'name', asc) do
 
       res_count = res_count + 1
    end -- if
+end
+
+if #results == 0 and not isEmptyString(query) then
+   -- No results - add shortcut to search in historical data
+   if hasClickHouseSupport() then
+      local label = ""
+      local what = ""
+      if isIPv6(query) or isIPv4(query) then
+         what = "ip"
+         label = i18n("db_search.find_in_historical", {what=what, query=query})
+         query = query .. tag_utils.SEPARATOR .. "eq"
+      elseif isMacAddress(query) then
+         what = "mac"
+         label = i18n("db_search.find_in_historical", {what=what, query=query})
+         query = query .. tag_utils.SEPARATOR .. "eq"
+      else
+         what = "hostname"
+         label = i18n("db_search.find_in_historical", {what=what, query=query})
+         query = query .. tag_utils.SEPARATOR .. "in"
+      end
+      results[#results + 1] = build_result(label, query, what, nil, nil, "historical")
+   end
 end
 
 local data = {

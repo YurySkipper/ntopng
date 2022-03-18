@@ -9,7 +9,7 @@
 	  <div class="btn-group" id="statusSwitch" role="group">
             <a href="#" @click="update_status_view('historical')" class="btn btn-sm" :class="{'active': status_view == 'historical', 'btn-seconday': status_view != 'historical', 'btn-primary': status_view == 'historical'}">Past</a>
             <a href="#" @click="update_status_view('acknowledged')" class="btn btn-sm" :class="{'active': status_view == 'acknowledged', 'btn-seconday': status_view != 'acknowledged', 'btn-primary': status_view == 'acknowledged'}">Ack</a>
-            <a href="#" @click="update_status_view('engaged')" class="btn btn-sm" :class="{'active': status_view == 'engaged', 'btn-seconday': status_view != 'engaged', 'btn-primary': status_view == 'engaged'}">Engaged</a>
+            <a v-if="page != 'flow'" href="#" @click="update_status_view('engaged')" class="btn btn-sm" :class="{'active': status_view == 'engaged', 'btn-seconday': status_view != 'engaged', 'btn-primary': status_view == 'engaged'}">Engaged</a>
 	  </div>
 	</div>
 	<select v-if="enable_query_preset" class="me-2 form-select" v-model="query_presets"  @change="update_select_query_presets()">
@@ -145,7 +145,10 @@ const load_filters_data = async function() {
     	    let options_string = value.split(",");
 	    options_string.forEach((opt_stirng) => {
     		let [value, operator] = opt_stirng.split(";");
-		if (operator == null || value == null || operator == "") {
+		if (
+		    operator == null || value == null || operator == ""
+		    || (filter_def.options != null && filter_def.options.find((opt) => opt.value == value) == null)
+		   ) {
 		    return;
 		}
 		filters.push({id: filter_def.id, operator: operator, value: value});
@@ -197,7 +200,7 @@ async function set_query_preset(range_picker_vue) {
 	});
     }
     if (range_picker_vue.query_presets == null || range_picker_vue.query_presets == "") {
-	range_picker_vue.query_presets = query_preset[0].value;
+	range_picker_vue.query_presets = query_preset[0].value;	
 	ntopng_url_manager.set_key_to_url("query_preset", query_preset[0].value);
     }
     range_picker_vue.query_preset = query_preset;
@@ -278,7 +281,7 @@ export default {
 	    let filters = status.filters;
 	    if (filters == null) { return; }
 	    // delete all previous filter
-	    ntopng_url_manager.delete_params(this.last_filters.map((f) => f.id));
+	    ntopng_url_manager.delete_params(FILTERS_CONST.map((f) => f.id));
 	    TAGIFY.tagify.removeAllTags();
 	    let filters_object = get_filters_object(filters);
 	    ntopng_url_manager.add_obj_to_url(filters_object);
