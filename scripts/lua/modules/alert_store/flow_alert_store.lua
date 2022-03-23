@@ -10,14 +10,14 @@ local classes = require "classes"
 
 require "lua_utils"
 local alert_store = require "alert_store"
-local format_utils = require "format_utils"
 local flow_risk_utils = require "flow_risk_utils"
 local alert_consts = require "alert_consts"
 local alert_utils = require "alert_utils"
 local alert_entities = require "alert_entities"
-local alert_roles = require "alert_roles"
 local tag_utils = require "tag_utils"
 local json = require "dkjson"
+
+local href_icon = "<i class='fas fa-laptop'></i>"
 
 -- ##############################################
 
@@ -55,6 +55,14 @@ function flow_alert_store:insert(alert)
    else
       hex_prefix = "X"
    end
+
+   -- Note
+   -- The database contains first_seen, tstamp, tstamp_end for historical reasons.
+   -- The time index is set on first_seen, thus:
+   -- - tstamp and first_seen contains the same value alert.first_seen
+   -- - tstamp_end is set to alert.tstamp (which is the time the alert has been emitted as there is no engage on flows)
+   -- - first_seen is used to lookups as this is the indexed field
+   -- - tstamp (instead of first_seen) is used in select and for visualization as it's in common to all tables
 
    local insert_stmt = string.format("INSERT INTO %s "..
       "(%salert_id, interface_id, tstamp, tstamp_end, severity, ip_version, cli_ip, srv_ip, cli_port, srv_port, vlan_id, "..
@@ -300,7 +308,6 @@ end
 
 --@brief Convert an alert coming from the DB (value) to a record returned by the REST API
 function flow_alert_store:format_record(value, no_html)
-   local href_icon = "<i class='fas fa-laptop'></i>"
    local record = self:format_json_record_common(value, alert_entities.flow.entity_id, no_html)
    local alert_info = alert_utils.getAlertInfo(value)
    local alert_name = alert_consts.alertTypeLabel(tonumber(value["alert_id"]), no_html, alert_entities.flow.entity_id)
@@ -358,9 +365,9 @@ function flow_alert_store:format_record(value, no_html)
 		     message = string.format("%s %s", message, flow_risk_utils.get_documentation_link(alert_risk))
 		  end
 
-      if alert_score > 0 then
-        message = addScoreToAlertDescr(message, alert_score)
-      end
+		  if alert_score > 0 then
+		     message = addScoreToAlertDescr(message, alert_score)
+		  end
 
 		  if not other_alerts_by_score[alert_score] then
 		     other_alerts_by_score[alert_score] = {}
@@ -435,7 +442,7 @@ function flow_alert_store:format_record(value, no_html)
  
    local reference_html = "" 
    if not no_html then
-      reference_html = hostinfo2detailshref({ip = value["cli_ip"]}, nil, href_icon, "", true, nil, false)
+      reference_html = hostinfo2detailshref({ip = value["cli_ip"], value["vlan_id"]}, nil, href_icon, "", true, nil, false)
       if reference_html == href_icon then
 	 reference_html = ""
       end
@@ -461,7 +468,7 @@ function flow_alert_store:format_record(value, no_html)
    if no_html then
       flow_cli_ip["label"] = cli_name_long
    else
-      if not isEmptyString(value["cli_name"]) then
+      if not isEmptyString(value["cli_name"]) and value["cli_name"] ~= flow_cli_ip["value"] then
          flow_cli_ip["name"] = value["cli_name"]
       end
 
@@ -474,7 +481,7 @@ function flow_alert_store:format_record(value, no_html)
 
    reference_html = ""
    if not no_html then
-      reference_html = hostinfo2detailshref({ip = value["srv_ip"]}, nil, href_icon, "", true)
+      reference_html = hostinfo2detailshref({ip = value["srv_ip"], vlan = value["vlan_id"]}, nil, href_icon, "", true)
       if reference_html == href_icon then
 	 reference_html = ""
       end
@@ -500,7 +507,7 @@ function flow_alert_store:format_record(value, no_html)
    if no_html then
       flow_srv_ip["label"] = srv_name_long
    else
-      if not isEmptyString(value["srv_name"]) then
+      if not isEmptyString(value["srv_name"]) and value["srv_name"] ~= flow_srv_ip["value"] then
          flow_srv_ip["name"] = value["srv_name"]
       end
       
@@ -553,7 +560,7 @@ function flow_alert_store:format_record(value, no_html)
       local op_suffix = tag_utils.SEPARATOR .. 'eq'
       local href = string.format('%s/lua/pro/db_search.lua?epoch_begin=%u&epoch_end=%u&cli_ip=%s%s&srv_ip=%s%s&cli_port=%s%s&srv_port=%s%s&l4proto=%s%s',
          ntop.getHttpPrefix(), 
-         tonumber(value["first_seen"]) - (5*60),
+         tonumber(value["tstamp"]) - (5*60),
          tonumber(value["tstamp_end"]) + (5*60), 
          value["cli_ip"], op_suffix,
          value["srv_ip"], op_suffix,
@@ -601,33 +608,55 @@ local function get_flow_link(fmt, add_hyperlink)
    local value = fmt['flow']['cli_ip']['value']
    local vlan = ''
    local tag = 'cli_ip'
+   local vlan_id = 0
 
    if fmt['flow']['vlan'] and fmt['flow']['vlan']["value"] ~= 0 then
+    vlan_id = tonumber(fmt['flow']['vlan']["value"])
     vlan = '@' .. get_label_link(fmt['flow']['vlan']['label'], 'vlan_id', fmt['flow']['vlan']["value"], add_hyperlink)
    end
 
+   local reference = hostinfo2detailshref({ip = fmt['flow']['cli_ip']['value'], vlan = vlan_id}, nil, href_icon, "", true)
+
+   local cli_ip = "" 
+   local srv_ip = ""
+
    if fmt['flow']['cli_ip']['label_long'] ~= fmt['flow']['cli_ip']['value'] then
-      value = fmt['flow']['cli_ip']['label_long']
-      tag = 'cli_name'
+    if add_hyperlink then
+      cli_ip = " [ " .. get_label_link(fmt['flow']['cli_ip']['value'], 'cli_ip', value, add_hyperlink) .. " ]"
+    end
+    value = fmt['flow']['cli_ip']['label_long']
+    tag = 'cli_name'
    end
-   label = label .. get_label_link(fmt['flow']['cli_ip']['label_long'], tag, value, add_hyperlink)
+   label = label .. get_label_link(fmt['flow']['cli_ip']['label_long'], tag, value, add_hyperlink) .. cli_ip
 
    if fmt['flow']['cli_port'] then
       label = label .. vlan .. ':' .. get_label_link(fmt['flow']['cli_port'], 'cli_port', fmt['flow']['cli_port'], add_hyperlink)
    end
 
+   if add_hyperlink then
+    label = label .. " " .. reference
+   end
+
    label = label .. ' <i class="fas fa-exchange-alt fa-lg" aria-hidden="true"></i> '
 
+   reference = hostinfo2detailshref({ip = fmt['flow']['srv_ip']['value'], vlan = vlan_id}, nil, href_icon, "", true)
    local value = fmt['flow']['srv_ip']['value']
    local tag = 'srv_ip'
    if fmt['flow']['srv_ip']['label_long'] ~= fmt['flow']['srv_ip']['value'] then
-      value = fmt['flow']['srv_ip']['label_long']
-      tag = 'srv_name'
+    if add_hyperlink then
+      srv_ip = " [ " .. get_label_link(fmt['flow']['srv_ip']['value'], 'srv_ip', value, add_hyperlink) .. " ]"
+    end   
+    value = fmt['flow']['srv_ip']['label_long']
+    tag = 'srv_name'
    end
-   label = label .. get_label_link(fmt['flow']['srv_ip']['label_long'], tag, value, add_hyperlink)
+   label = label .. get_label_link(fmt['flow']['srv_ip']['label_long'], tag, value, add_hyperlink) .. srv_ip
 
    if fmt['flow']['srv_port'] then
       label = label .. vlan .. ':' .. get_label_link(fmt['flow']['srv_port'], 'srv_port', fmt['flow']['srv_port'], add_hyperlink)
+   end
+
+   if add_hyperlink then
+    label = label .. " " .. reference
    end
 
    return label
@@ -640,13 +669,11 @@ end
 local function editProtoDetails(proto_info)
   for proto, info in pairs(proto_info) do
     if proto == "tls" then
-      if info.notBefore then
-        info.notBefore = formatEpoch(info.notBefore)
-      end
-
-      if info.notAfter then
-        info.notAfter = formatEpoch(info.notAfter)
-      end      
+      info = format_tls_info(info)
+    elseif proto == "dns" then
+      info = format_dns_query_info(info)
+    elseif proto == "http" then
+      info = format_http_info(info)
     end
   end
 
@@ -670,6 +697,7 @@ function flow_alert_store:get_alert_details(value)
    local add_hyperlink = true
    local json = json.decode(value["json"])
    local proto_info = json["proto"]
+   local traffic_info = {}
 
    details[#details + 1] = {
       label = i18n("alerts_dashboard.alert"),
@@ -706,16 +734,17 @@ function flow_alert_store:get_alert_details(value)
       content = fmt['additional_alerts']['descr'],
    }
 
-   details[#details + 1] = {
-      label = i18n("alerts_dashboard.flow_related_info"),
-      content = fmt['flow_related_info']['descr'],
-   }
+   proto_info = editProtoDetails(proto_info or {})
+   traffic_info = format_common_info(value, traffic_info)
 
-   proto_info = editProtoDetails(proto_info)
+   details[#details + 1] = {
+      label = i18n("flow_details.traffic_info"),
+      content = traffic_info
+   }
 
    for _, info in pairs(proto_info or {}) do
       details[#details + 1] = {
-         label = i18n("proto_info"),
+         label = i18n("alerts_dashboard.flow_related_info"),
          content = info
       }
    end

@@ -815,7 +815,7 @@ class NetworkInterface : public NetworkInterfaceAlertableEntity {
   };
   int exec_csv_query(const char *sql, bool dump_in_json_format, struct mg_connection *conn);
 
-  NetworkStats* getNetworkStats(u_int8_t networkId) const;
+  NetworkStats* getNetworkStats(u_int16_t networkId) const;
   void allocateStructures();
   void getsDPIStats(lua_State *vm);
   inline bool isDbCreated() { return(db ? db->isDbCreated() : true); };
@@ -838,10 +838,10 @@ class NetworkInterface : public NetworkInterfaceAlertableEntity {
 #ifdef NTOPNG_PRO
   void updateBehaviorStats(const struct timeval *tv);
 
-  void getFlowDevices(lua_State *vm) {
+  virtual void getFlowDevices(lua_State *vm) {
     if(flow_interfaces_stats) flow_interfaces_stats->luaDeviceList(vm); else lua_newtable(vm);
   };
-  void getFlowDeviceInfo(lua_State *vm, u_int32_t deviceIP) {
+  virtual void getFlowDeviceInfo(lua_State *vm, u_int32_t deviceIP) {
     if(flow_interfaces_stats) flow_interfaces_stats->luaDeviceInfo(vm, deviceIP, this); else lua_newtable(vm);
   };
 #endif

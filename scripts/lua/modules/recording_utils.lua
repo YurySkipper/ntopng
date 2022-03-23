@@ -478,8 +478,7 @@ function recording_utils.createConfig(ifid, params)
   local mem_info = memInfo()
   local mem_available_mb = mem_info['MemAvailable']
 
-  -- Computing file and buffer size
-
+  -- Computing file and buffer size based on link speed
   local num_buffered_files = 4
   local min_file_size = 16 
   if ifspeed > 10000 then -- 40/100G
@@ -494,8 +493,8 @@ function recording_utils.createConfig(ifid, params)
     defaults.max_file_size = 64
     num_buffered_files = 2
   end
-  defaults.buffer_size = num_buffered_files * defaults.max_file_size
 
+  defaults.buffer_size = num_buffered_files * defaults.max_file_size
   local total_n2disk_mem = defaults.buffer_size * 2 -- pcap + index buffer
 
   if mem_available_mb ~= nil and mem_available_mb < total_n2disk_mem then
@@ -506,8 +505,13 @@ function recording_utils.createConfig(ifid, params)
       return false
     end
     defaults.buffer_size = (mem_available_mb/2) -- leave some room for index memory and other processes
-    defaults.max_file_size = math.floor(defaults.buffer_size/num_buffered_files)
+    local recomputed_max_file_size = math.floor(defaults.buffer_size/num_buffered_files)
+    if defaults.max_file_size > recomputed_max_file_size then
+      defaults.max_file_size = recomputed_max_file_size
+    end
   end
+
+  -- Checking disk space
 
   -- Computing core affinity
 
@@ -549,6 +553,11 @@ function recording_utils.createConfig(ifid, params)
 
   local config = table.merge(defaults, params)
 
+  -- Recomputing file size based on disk space (2 files + index should fit min)
+  if (config.max_file_size*4) > config.max_disk_space then
+    config.max_file_size = config.max_disk_space/4
+  end
+
   -- Writing configuration file
 
   local ret = ntop.mkdir(conf_dir)
@@ -575,6 +584,8 @@ function recording_utils.createConfig(ifid, params)
   f:write("--max-file-duration="..config.max_file_duration.."\n")
   f:write("--disk-limit="..config.max_disk_space.."\n")
   f:write("--snaplen="..config.snaplen.."\n")
+
+  -- CPU Core affinity
   f:write("--writer-cpu-affinity="..config.writer_core.."\n")
   f:write("--reader-cpu-affinity="..config.reader_core.."\n")
   f:write("--compressor-cpu-affinity=")
@@ -583,11 +594,15 @@ function recording_utils.createConfig(ifid, params)
   end
   f:write("\n")
   f:write("--index-on-compressor-threads\n")
+
+  -- User
   if not isEmptyString(prefs.user) then
     f:write("-u="..prefs.user.."\n");
   else
     f:write("--dont-change-user\n");
   end
+
+  -- Capture direction
   if interface.isPacketInterface() then
     if prefs.capture_direction == "in" then
       f:write("--capture-direction=1\n")
@@ -597,11 +612,17 @@ function recording_utils.createConfig(ifid, params)
       f:write("--capture-direction=0\n")
     end
   end
+
+  -- ZMQ
   if config.zmq_endpoint ~= nil then
     f:write("--zmq="..config.zmq_endpoint.."\n")
     f:write("--zmq-probe-mode\n")
     f:write("--zmq-export-flows\n")
   end
+
+  -- Index both outer header and tunneled traffic to reflect what ntopng shows
+  f:write("--index-tunnel-content=1\n")
+
   -- Ignored by systemd, required by init.d
   f:write("--daemon\n")
   f:write("-P=/var/run/n2disk-"..ifname..".pid\n")

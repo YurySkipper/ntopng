@@ -4777,29 +4777,25 @@ function addHTTPInfoToAlertDescr(msg, alert_json)
       and (table.len(alert_json["proto"] or {}) > 0) 
       and (table.len(alert_json["proto"]["http"]) > 0)) then
       
-      if alert_json["proto"]["http"]["last_method"] then
-         msg = msg .. string.format(" [ %s: %s ]", 
-            i18n("db_explorer.http_method"), 
-            alert_json["proto"]["http"]["last_method"])
+      local http_info = format_http_info({ http_info = alert_json["proto"]["http"]["last_method"], 
+                                            last_return_code = alert_json["proto"]["http"]["last_return_code"],
+                                            last_user_agent = alert_json["proto"]["http"]["last_user_agent"],
+                                            last_url = alert_json["proto"]["http"]["last_url"] })
+
+      if http_info["last_method"] then
+         msg = msg .. string.format(" [ %s: %s ]", i18n("db_explorer.http_method"), http_info["last_method"])
       end
 
-      if alert_json["proto"]["http"]["last_return_code"] then
-         msg = msg .. string.format(" [ %s: %s ]", 
-            i18n("last_response_status_code"),
-            http_utils.getResponseStatusCode(alert_json["proto"]["http"]["last_return_code"]))
+      if http_info["last_return_code"] then
+         msg = msg .. string.format(" [ %s: %s ]", i18n("last_response_status_code"), http_info["last_return_code"])
       end
 
-      if alert_json["proto"]["http"]["last_user_agent"] then
-         msg = msg .. string.format(" [ %s: %s ]", 
-            i18n("last_user_agent"),  
-            alert_json["proto"]["http"]["last_user_agent"])
+      if http_info["last_user_agent"] then
+         msg = msg .. string.format(" [ %s: %s ]", i18n("last_user_agent"), http_info["last_user_agent"])
       end
 
-      if alert_json["proto"]["http"]["last_url"] then
-         msg = msg .. string.format(" [ %s: %s ]", 
-            i18n("last_url"),
-            i18n("external_link_url", { url = alert_json["proto"]["http"]["last_url"], 
-                                        url_name = alert_json["proto"]["http"]["last_url"]}))
+      if http_info["last_url"] then
+         msg = msg .. string.format(" [ %s: %s ]", i18n("last_url"), http_info["last_url"])
       end
    end
 
@@ -4813,23 +4809,24 @@ function addDNSInfoToAlertDescr(msg, alert_json)
       and (table.len(alert_json["proto"] or {}) > 0) 
       and (table.len(alert_json["proto"]["dns"] or {}) > 0)) then
       
-      if alert_json["proto"]["dns"]["last_query_type"] then
+      local dns_info = format_dns_query_info({ last_query_type = alert_json["proto"]["dns"]["last_query_type"], 
+                                                last_return_code = alert_json["proto"]["dns"]["last_return_code"],
+                                                last_query = alert_json["proto"]["dns"]["last_query"] })
+
+      if dns_info["last_query_type"] then
          msg = msg .. string.format(" [ %s: %s ]", 
             i18n("last_query_type"), 
-            dns_utils.getQueryType(alert_json["proto"]["dns"]["last_query_type"]))
+            dns_info["last_query_type"])
       end
 
-      if alert_json["proto"]["dns"]["last_return_code"] then
+      if dns_info["last_return_code"] then
          msg = msg .. string.format(" [ %s: %s ]", 
             i18n("last_return_code"),
-            dns_utils.getResponseStatusCode(alert_json["proto"]["dns"]["last_return_code"]))
+            dns_info["last_return_code"])
       end
 
-      if alert_json["proto"]["dns"]["last_query"] then
-         msg = msg .. string.format(" [ %s: %s ]", 
-            i18n("last_url"),
-            i18n("external_link_url", { url = alert_json["proto"]["dns"]["last_query"], 
-                                        url_name = alert_json["proto"]["dns"]["last_query"]}))
+      if dns_info["last_query"] then
+         msg = msg .. string.format(" [ %s: %s ]", i18n("last_url"), dns_info["last_query"])
       end
    end
 
@@ -4842,17 +4839,22 @@ function addTLSInfoToAlertDescr(msg, alert_json)
    if ((alert_json)
       and (table.len(alert_json["proto"] or {}) > 0) 
       and (table.len(alert_json["proto"]["tls"] or {}) > 0)) then
-      if alert_json["proto"]["tls"]["notBefore"] and alert_json["proto"]["tls"]["notAfter"] then
-         msg = msg .. string.format(" [ %s: %s - %s ]", 
-            i18n("flow_details.tls_certificate_validity"), 
-            formatEpoch(alert_json["proto"]["tls"]["notBefore"]),
-            formatEpoch(alert_json["proto"]["tls"]["notAfter"]))
+
+      local tls_info = format_tls_info({ notBefore = alert_json["proto"]["tls"]["notBefore"], 
+                                          notAfter = alert_json["proto"]["tls"]["notAfter"],
+                                          client_requested_server_name = alert_json["proto"]["tls"]["client_requested_server_name"],
+                                          ['ja3.server_unsafe_cipher'] = alert_json["proto"]["tls"]["ja3.server_unsafe_cipher"] })
+
+      if tls_info["tls_certificate_validity"] then
+        msg = msg .. string.format(" [ %s: %s ]", i18n("tls_certificate_validity"), tls_info["tls_certificate_validity"])
       end
 
-      if alert_json["proto"]["tls"]["version"] then
-         msg = msg .. string.format(" [ %s: %s ]", 
-            i18n("flow_details.tls_version"), 
-            alert_json["proto"]["tls"]["version"])
+      if tls_info["ja3.server_unsafe_cipher"] then
+        msg = msg .. string.format(" [ %s: %s ]", i18n("ja3.server_unsafe_cipher"), tls_info["ja3.server_unsafe_cipher"])
+      end
+
+      if tls_info["client_requested_server_name"] then
+        msg = msg .. string.format(" [ %s: %s ]", i18n("client_requested_server_name"), tls_info["client_requested_server_name"])
       end
    end
 
@@ -5042,7 +5044,7 @@ function format_portidx_name(cached_dev, portidx, short_version)
       if short_version then
         idx_name = string.format('%s [%s]', port_info["index"], port_info["name"]) 
       else
-        idx_name = string.format('%s', i18n("snmp.interface_device", {interface=snmp_location.snmp_port_link(port_info), device=snmp_location.snmp_device_link(cached_dev["host_ip"])}))                                                                                                                                                                
+        idx_name = string.format('%s', i18n("snmp.interface_device_2", {interface=snmp_location.snmp_port_link(port_info, true), device=snmp_location.snmp_device_link(cached_dev["host_ip"])}))                                                                                                                                                                
       end               
     end
   end                                                                                                                                                                                              
@@ -5050,10 +5052,131 @@ function format_portidx_name(cached_dev, portidx, short_version)
   return idx_name                                                                                                                                                                                                 
 end   
 
+-- ##############################################
+
 function print_copy_button(id, data)
    print('<button style="" class="btn btn-sm border ms-1" data-placement="bottom" id="btn-copy-' .. id ..'" data="' .. data .. '"><i class="fas fa-copy"></i></button>')
    print("<script>$('#btn-copy-" .. id .. "').click(function(e) { NtopUtils.copyToClipboard($(this).attr('data'), '" .. i18n('copied') .. "', '" .. i18n('request_failed_message') .. "', $(this));});</script>")   
 end
+
+-- ##############################################
+
+function get_badge(info)
+  local badge = 'success'
+
+  if info ~= true and info ~= 0 then
+    badge = 'danger'
+  end
+
+  return badge
+end
+
+-- ##############################################
+
+-- @brief Given a table of values, if available, it's going to format the values with the standard
+--        info and then return the same table formatted
+function format_dns_query_info(dns_info)
+  if dns_info.last_query_type then
+    dns_info.last_query_type = string.format('<span class="badge bg-info">%s</span>', dns_utils.getQueryType(dns_info.last_query_type))
+  end
+
+  if dns_info.last_return_code then
+    local badge = get_badge(dns_info.last_return_code)
+    dns_info.last_return_code = string.format('<span class="badge bg-%s">%s</span>', badge, dns_utils.getResponseStatusCode(dns_info.last_return_code))
+  end
+
+  if dns_info.last_query then
+    dns_info.last_query = i18n("external_link_url", { url = dns_info["last_query"], url_name = dns_info["last_query"] })
+  end
+
+  return dns_info
+end
+
+-- ##############################################
+
+function format_tls_info(tls_info)
+  if tls_info.notBefore then
+    tls_info.notBefore = formatEpoch(tls_info.notBefore)
+  end
+
+  if tls_info.notAfter then
+    tls_info.notAfter = formatEpoch(tls_info.notAfter)
+  end     
+
+  if tls_info.notBefore and tls_info.notAfter then
+    tls_info["tls_certificate_validity"] = string.format("%s - %s", tls_info.notBefore, tls_info.notAfter)
+    tls_info.notBefore = nil
+    tls_info.notAfter = nil
+  end
+
+  if tls_info.tls_version then
+    tls_info["tls_version"] = ntop.getTLSVersionName(tls_info.tls_version)
+  end
+
+  if tls_info.client_requested_server_name then
+    tls_info["client_requested_server_name"] = i18n("external_link_url", { url = tls_info["client_requested_server_name"], url_name = tls_info["client_requested_server_name"]})
+  end
+
+  if tls_info["ja3.server_unsafe_cipher"] then
+    local badge = get_badge(tls_info["ja3.server_unsafe_cipher"] == "safe")
+    tls_info["ja3.server_unsafe_cipher"] = string.format('<span class="badge bg-%s">%s</span>', badge, tls_info["ja3.server_unsafe_cipher"])
+  end
+
+  if tls_info["ja3.server_hash"] then
+    tls_info["ja3.server_hash"] = i18n("copy_button", { full_name = tls_info["ja3.server_hash"], name = tls_info["ja3.server_hash"] })
+  end
+
+  if tls_info["ja3.client_hash"] then
+    tls_info["ja3.client_hash"] = i18n("copy_button", { full_name = tls_info["ja3.client_hash"], name = tls_info["ja3.client_hash"] })
+  end
+
+  if tls_info["server_names"] then
+    tls_info["server_names"] = i18n("copy_button", { full_name = tls_info["server_names"], name = shortenString(tls_info["server_names"],128) })
+  end
+
+  return tls_info
+end
+
+-- ##############################################
+
+function format_http_info(http_info)
+  if http_info["last_return_code"] then
+    local badge = get_badge(http_info.last_return_code == 200)
+    http_info["last_return_code"] = string.format('<span class="badge bg-%s">%s</span>', badge, http_utils.getResponseStatusCode(http_info["last_return_code"]))
+  end
+
+  if http_info["last_method"] then
+    http_info["last_method"] = string.format('<span class="badge bg-info">%s</span>', http_info["last_method"])
+  end
+
+  if http_info["last_url"] then
+    http_info["last_url"] = i18n("external_link_url", { url = http_info["last_url"], url_name = http_info["last_url"]})
+  end
+
+  if http_info["server_name"] then
+    http_info["server_name"] = i18n("copy_button", { full_name = http_info["server_name"], name = shortenString(http_info["server_name"], 32)})
+  end
+
+  return http_info
+end
+
+-- ##############################################
+
+function format_common_info(flow_info, formatted_info)
+  local predominant_bytes = i18n("traffic_srv_to_cli")
+
+  if (tonumber(flow_info["cli2srv_bytes"] or 0)) > (tonumber(flow_info["srv2cli_bytes"] or 0)) then
+    predominant_bytes = i18n("traffic_cli_to_srv")
+  end
+
+  formatted_info["predominant_direction"] = predominant_bytes
+  formatted_info["server_traffic"] = bytesToSize(flow_info["srv2cli_bytes"] or 0)
+  formatted_info["client_traffic"] = bytesToSize(flow_info["cli2srv_bytes"] or 0)
+   
+  return formatted_info
+end
+
+-- ##############################################
 
 --
 -- IMPORTANT
