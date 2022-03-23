@@ -6091,7 +6091,7 @@ local lang = {
       ["embed_widget_desc_2"] = " Please be sure to have included the ntop widget script <code>ntop-widgets.js</code> in your page.",
     },
     ["validation"] = {
-      ["abort_add"] = "Abort add of a Widget?",
+      ["abort_add"] = "Прекратить добавление Виджета?",
       ["abort_edit"] = "Abort edit of a Widget?",
     },
   },
