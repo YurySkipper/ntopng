@@ -6092,7 +6092,7 @@ local lang = {
     },
     ["validation"] = {
       ["abort_add"] = "Прекратить добавление Виджета?",
-      ["abort_edit"] = "Abort edit of a Widget?",
+      ["abort_edit"] = "Прекратить редактирование Виджета?",
     },
   },
 }
