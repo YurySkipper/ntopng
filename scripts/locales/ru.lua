@@ -6056,7 +6056,7 @@ local lang = {
     },
   },
   ["validation"] = {
-    ["FAILED_HTTP_REQUEST"] = "The request failed, please try later.",
+    ["FAILED_HTTP_REQUEST"] = "Запрос отклонен, повторите попытку позже.",
     ["empty_name"] = "Please insert a name.",
     ["invalid_input"] = "Please respect the input pattern.",
     ["missing_field"] = "Please fill the input.",
